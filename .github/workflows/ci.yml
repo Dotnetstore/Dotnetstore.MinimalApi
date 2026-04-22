@@ -1,0 +1,81 @@
+﻿name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SOLUTION_PATH: Dotnetstore.MinimalApi.slnx
+  TEST_PROJECT_PATH: tests/Dotnetstore.MinimalApi.Api.WebApi.Tests/Dotnetstore.MinimalApi.Api.WebApi.Tests.csproj
+  COVERAGE_FILE: artifacts/coverage/coverage.cobertura.xml
+  COVERAGE_REPORT_DIRECTORY: artifacts/coverage-report
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            global.json
+            Directory.Build.props
+            **/*.csproj
+
+      - name: Restore solution
+        run: dotnet restore "$SOLUTION_PATH"
+
+      - name: Build solution
+        run: dotnet build "$SOLUTION_PATH" --configuration Release --no-restore
+
+      - name: Install coverage tools
+        run: |
+          mkdir -p ./.tools
+          dotnet tool install dotnet-coverage --tool-path ./.tools
+          dotnet tool install dotnet-reportgenerator-globaltool --tool-path ./.tools
+
+      - name: Run automated tests with coverage
+        run: |
+          mkdir -p "$(dirname "$COVERAGE_FILE")"
+          ./.tools/dotnet-coverage collect "dotnet run --project \"$TEST_PROJECT_PATH\" --configuration Release --no-build" -f cobertura -o "$COVERAGE_FILE"
+
+      - name: Generate coverage report
+        run: |
+          ./.tools/reportgenerator \
+            "-reports:$COVERAGE_FILE" \
+            "-targetdir:$COVERAGE_REPORT_DIRECTORY" \
+            "-assemblyfilters:+Dotnetstore.MinimalApi.Api.WebApi;-Dotnetstore.MinimalApi.Api.WebApi.Tests" \
+            "-filefilters:-*OpenApiXmlCommentSupport.generated.cs" \
+            "-reporttypes:HtmlInline;MarkdownSummaryGithub;Badges"
+
+      - name: Publish coverage summary
+        run: cat "$COVERAGE_REPORT_DIRECTORY/SummaryGithub.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            ${{ env.COVERAGE_FILE }}
+            ${{ env.COVERAGE_REPORT_DIRECTORY }}
+          if-no-files-found: error
+          retention-days: 14
+

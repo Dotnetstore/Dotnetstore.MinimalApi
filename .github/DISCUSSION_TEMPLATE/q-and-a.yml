@@ -1,0 +1,35 @@
+﻿title: "question: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask a question about the API, test setup, workflows, containers, or deployment.
+  - type: input
+    id: summary
+    attributes:
+      label: Question summary
+      description: A short description of your question.
+      placeholder: How do I configure Azure deployment secrets for the CD workflow?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Describe what you are trying to do and any steps you have already tried.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, .NET SDK version, Docker version, or workflow run link if relevant.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      render: shell
+category: Q&A
+

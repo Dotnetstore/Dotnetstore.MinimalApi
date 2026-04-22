@@ -1,0 +1,6 @@
+﻿blank_issues_enabled: true
+contact_links:
+  - name: Project documentation
+    url: https://github.com/Dotnetstore/Dotnetstore.MinimalApi#readme
+    about: Review the README for setup, workflows, and release guidance before opening an issue.
+

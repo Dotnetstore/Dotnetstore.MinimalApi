@@ -1,0 +1,212 @@
+﻿name: CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: Azure deployment target for manual runs
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+  push:
+    branches:
+      - main
+    tags:
+      - v*
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SOLUTION_PATH: Dotnetstore.MinimalApi.slnx
+  TEST_PROJECT_PATH: tests/Dotnetstore.MinimalApi.Api.WebApi.Tests/Dotnetstore.MinimalApi.Api.WebApi.Tests.csproj
+  WEB_API_PROJECT_PATH: src/Dotnetstore.MinimalApi.Api.WebApi/Dotnetstore.MinimalApi.Api.WebApi.csproj
+  PUBLISH_DIRECTORY: artifacts/publish/webapi
+
+jobs:
+  publish-artifact:
+    name: Publish release artifact
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            global.json
+            Directory.Build.props
+            **/*.csproj
+
+      - name: Restore solution
+        run: dotnet restore "$SOLUTION_PATH"
+
+      - name: Build solution
+        run: dotnet build "$SOLUTION_PATH" --configuration Release --no-restore
+
+      - name: Run automated tests
+        run: dotnet run --project "$TEST_PROJECT_PATH" --configuration Release --no-build
+
+      - name: Publish Web API
+        run: dotnet publish "$WEB_API_PROJECT_PATH" --configuration Release --no-build --output "$PUBLISH_DIRECTORY"
+
+      - name: Upload published artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webapi-publish-${{ github.ref_name }}
+          path: ${{ env.PUBLISH_DIRECTORY }}
+          if-no-files-found: error
+          retention-days: 14
+
+  create-release:
+    name: Create GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: publish-artifact
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download published artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: webapi-publish-${{ github.ref_name }}
+          path: artifacts/release/webapi
+
+      - name: Create release archive
+        shell: pwsh
+        run: |
+          $archivePath = "artifacts/release/Dotnetstore.MinimalApi-${{ github.ref_name }}.zip"
+          if (Test-Path $archivePath) {
+            Remove-Item $archivePath -Force
+          }
+
+          Compress-Archive -Path "artifacts/release/webapi/*" -DestinationPath $archivePath
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tagName = "${{ github.ref_name }}"
+          $archivePath = "artifacts/release/Dotnetstore.MinimalApi-$tagName.zip"
+
+          gh release view $tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tagName $archivePath --clobber
+          }
+          else {
+            gh release create $tagName $archivePath --title "Dotnetstore.MinimalApi $tagName" --generate-notes --verify-tag
+          }
+
+  deploy-to-azure-staging:
+    name: Deploy to Azure App Service (staging slot)
+    if: ${{ needs.publish-artifact.result == 'success' && (github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.deploy_target == 'staging')) }}
+    needs: publish-artifact
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+
+    steps:
+      - name: Check Azure deployment configuration
+        id: staging-config
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
+          AZURE_STAGING_SLOT_NAME: ${{ vars.AZURE_STAGING_SLOT_NAME }}
+        run: |
+          if [[ -n "$AZURE_CLIENT_ID" && -n "$AZURE_TENANT_ID" && -n "$AZURE_SUBSCRIPTION_ID" && -n "$AZURE_WEBAPP_NAME" ]]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            if [[ -n "$AZURE_STAGING_SLOT_NAME" ]]; then
+              echo "slot_name=$AZURE_STAGING_SLOT_NAME" >> "$GITHUB_OUTPUT"
+            else
+              echo "slot_name=staging" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Azure deployment secrets are not configured. Skipping staging deployment."
+          fi
+
+      - name: Download published artifact
+        if: steps.staging-config.outputs.deploy == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: webapi-publish-${{ github.ref_name }}
+          path: artifacts/deploy/webapi
+
+      - name: Azure login
+        if: steps.staging-config.outputs.deploy == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy package to Azure Web App staging slot
+        if: steps.staging-config.outputs.deploy == 'true'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          slot-name: ${{ steps.staging-config.outputs.slot_name }}
+          package: artifacts/deploy/webapi
+
+  deploy-to-azure-production:
+    name: Deploy to Azure App Service (production)
+    if: ${{ needs.publish-artifact.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.deploy_target == 'production')) }}
+    needs: publish-artifact
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+
+    steps:
+      - name: Check Azure deployment configuration
+        id: production-config
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
+        run: |
+          if [[ -n "$AZURE_CLIENT_ID" && -n "$AZURE_TENANT_ID" && -n "$AZURE_SUBSCRIPTION_ID" && -n "$AZURE_WEBAPP_NAME" ]]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Azure deployment secrets are not configured. Skipping production deployment."
+          fi
+
+      - name: Download published artifact
+        if: steps.production-config.outputs.deploy == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: webapi-publish-${{ github.ref_name }}
+          path: artifacts/deploy/webapi
+
+      - name: Azure login
+        if: steps.production-config.outputs.deploy == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy package to Azure Web App production
+        if: steps.production-config.outputs.deploy == 'true'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          package: artifacts/deploy/webapi
+

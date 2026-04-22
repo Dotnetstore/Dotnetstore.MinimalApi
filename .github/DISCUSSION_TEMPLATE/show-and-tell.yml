@@ -1,0 +1,30 @@
+﻿title: "show: "
+labels:
+  - showcase
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share something you built, learned, or improved using this repository.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: A short headline for what you want to share.
+      placeholder: We deployed the API to App Service with staging and production slots.
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What are you sharing?
+      description: Describe the implementation, result, or lesson learned.
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: Links, screenshots, or references
+      description: Add any screenshots, links, or notes that help others learn from it.
+category: Show and tell
+

@@ -1,0 +1,69 @@
+﻿name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+change-template: '- $TITLE (#$NUMBER) by @$AUTHOR'
+no-changes-template: '- No user-facing changes in this release.'
+version-resolver:
+  major:
+    labels:
+      - 'breaking-change'
+      - 'major'
+  minor:
+    labels:
+      - 'feature'
+      - 'enhancement'
+      - 'minor'
+  patch:
+    labels:
+      - 'bug'
+      - 'fix'
+      - 'patch'
+      - 'documentation'
+      - 'dependencies'
+  default: patch
+categories:
+  - title: '🚀 Features'
+    labels:
+      - 'feature'
+      - 'enhancement'
+  - title: '🐛 Fixes'
+    labels:
+      - 'bug'
+      - 'fix'
+  - title: '🧪 Tests'
+    labels:
+      - 'test'
+  - title: '📚 Documentation'
+    labels:
+      - 'documentation'
+  - title: '🏗️ CI / Build'
+    labels:
+      - 'ci'
+      - 'build'
+      - 'dependencies'
+autolabeler:
+  - label: 'documentation'
+    files:
+      - '*.md'
+      - 'docs/**'
+  - label: 'ci'
+    files:
+      - '.github/**'
+  - label: 'build'
+    files:
+      - 'Dockerfile'
+      - '.dockerignore'
+  - label: 'test'
+    files:
+      - 'tests/**'
+  - label: 'feature'
+    branch:
+      - '/^feat\//'
+  - label: 'fix'
+    branch:
+      - '/^fix\//'
+exclude-labels:
+  - 'skip-changelog'
+replacers:
+  - search: '/(by @.+)$/'
+    replace: ''
+

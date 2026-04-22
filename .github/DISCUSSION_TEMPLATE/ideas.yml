@@ -1,0 +1,46 @@
+﻿title: "idea: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share an idea for improving the API, workflows, tooling, or documentation.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: A short title for the idea.
+      placeholder: Add a health endpoint for deployment verification.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: What problem does this idea solve, or what opportunity does it unlock?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Describe the change you have in mind.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - API
+        - Tests
+        - GitHub Actions
+        - Docker / Containers
+        - Azure deployment
+        - Documentation
+        - Other
+    validations:
+      required: true
+category: Ideas
+

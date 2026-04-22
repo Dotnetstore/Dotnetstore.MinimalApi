@@ -1,0 +1,11 @@
+﻿**/bin/
+**/obj/
+.git/
+.github/
+.idea/
+.vs/
+.tools/
+artifacts/
+README.md
+LICENSE
+

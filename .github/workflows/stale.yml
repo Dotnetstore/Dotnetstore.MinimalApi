@@ -1,0 +1,48 @@
+﻿name: Stale Cleanup
+
+on:
+  schedule:
+    - cron: "30 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: stale-cleanup
+  cancel-in-progress: false
+
+jobs:
+  stale:
+    name: Mark stale issues and pull requests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Mark stale items
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-message: >-
+            This issue has been automatically marked as stale due to inactivity.
+            Please add an update if it still needs attention.
+          close-issue-message: >-
+            This issue was closed automatically after additional inactivity.
+            Feel free to reopen it with fresh context.
+          stale-pr-message: >-
+            This pull request has been automatically marked as stale due to inactivity.
+            Please push an update or leave a comment if it is still active.
+          close-pr-message: >-
+            This pull request was closed automatically after additional inactivity.
+            Feel free to reopen it when work resumes.
+          days-before-issue-stale: 60
+          days-before-issue-close: 14
+          days-before-pr-stale: 30
+          days-before-pr-close: 14
+          stale-issue-label: stale
+          stale-pr-label: stale
+          exempt-issue-labels: pinned,security,dependencies,release,feature
+          exempt-pr-labels: pinned,security,dependencies,release,work-in-progress
+          remove-stale-when-updated: true
+          operations-per-run: 250
+

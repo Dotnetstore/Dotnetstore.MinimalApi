@@ -1,0 +1,47 @@
+﻿documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "docs/**"
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+
+github-actions:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/actions/**"
+          - ".github/workflows/**"
+
+api:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/**"
+
+test:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.csproj"
+          - "Directory.Build.props"
+          - "global.json"
+          - ".github/dependabot.yml"
+
+docker:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "Dockerfile"
+          - ".dockerignore"
+
+azure:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/cd.yml"
+          - "docs/branch-protection.md"
+

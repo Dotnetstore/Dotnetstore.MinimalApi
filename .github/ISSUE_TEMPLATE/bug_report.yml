@@ -1,0 +1,63 @@
+﻿name: Bug report
+description: Report a reproducible problem in the API, workflow, or tests.
+title: "fix: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug.
+        Please provide enough detail for reproduction and troubleshooting.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: A short description of the bug.
+      placeholder: The API returns 500 when requesting the OpenAPI document in production.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the exact steps to reproduce the issue.
+      placeholder: |
+        1. Start the API
+        2. Call GET /openapi/v1.json
+        3. Observe the response
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment details
+      description: Include OS, .NET SDK version, browser, GitHub Actions run link, or container tag if relevant.
+      placeholder: Windows 11, .NET SDK 10.0.203, CI run 123456789
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Paste any logs, stack traces, or screenshots that help diagnose the issue.
+      render: shell
+

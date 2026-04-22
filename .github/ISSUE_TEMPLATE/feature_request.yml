@@ -1,0 +1,58 @@
+﻿name: Feature request
+description: Suggest an improvement for the API, automation, or developer experience.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion.
+        Please describe the outcome you want and why it matters.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: A short description of the feature request.
+      placeholder: Add a health check endpoint for deployment verification.
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem are you trying to solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe your preferred solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any alternatives or tradeoffs you have considered.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Impacted area
+      options:
+        - API
+        - Tests
+        - GitHub Actions
+        - Docker / Containers
+        - Azure deployment
+        - Documentation
+        - Other
+    validations:
+      required: true
+
