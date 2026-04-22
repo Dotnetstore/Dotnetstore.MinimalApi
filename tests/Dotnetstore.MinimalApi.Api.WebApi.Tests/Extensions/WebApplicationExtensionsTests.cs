@@ -1,4 +1,6 @@
 ﻿using System.Net;
+using Asp.Versioning;
+using Dotnetstore.MinimalApi.Api.WebApi.Handlers;
 using Dotnetstore.MinimalApi.Api.WebApi.Tests.Helpers;
 using Dotnetstore.MinimalApi.Api.WebApi.Extensions;
 using Microsoft.AspNetCore.Builder;
@@ -6,6 +8,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Shouldly;
 
 namespace Dotnetstore.MinimalApi.Api.WebApi.Tests.Extensions;
@@ -30,6 +33,55 @@ public sealed class WebApplicationExtensionsTests
 
         // Assert
         result.ShouldBe(builder);
+    }
+
+    [Fact]
+    public void RegisterWebApi_ConfiguresApiVersioningOptions()
+    {
+        // Arrange
+        var builder = CreateBuilder();
+
+        // Act
+        builder.RegisterWebApi();
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<ApiVersioningOptions>>().Value;
+        var request = new DefaultHttpContext().Request;
+        request.Headers.Append("api-version", "1.0");
+
+        // Assert
+        options.DefaultApiVersion.ShouldBe(new ApiVersion(1, 0));
+        options.ReportApiVersions.ShouldBeTrue();
+        options.AssumeDefaultVersionWhenUnspecified.ShouldBeTrue();
+
+        var versionReader = options.ApiVersionReader.ShouldBeOfType<HeaderApiVersionReader>();
+        versionReader.HeaderNames.ShouldHaveSingleItem().ShouldBe("api-version");
+        versionReader.Read(request).ShouldHaveSingleItem().ShouldBe("1.0");
+    }
+
+    [Fact]
+    public void RegisterWebApi_RegistersWebApplicationHandlers_AsScopedService()
+    {
+        // Arrange
+        var builder = CreateBuilder();
+
+        // Act
+        builder.RegisterWebApi();
+
+        var serviceDescriptor = builder.Services.SingleOrDefault(service =>
+            service.ServiceType == typeof(IWebApplicationHandlers));
+
+        using var serviceProvider = builder.Services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateScopes = true
+        });
+        using var scope = serviceProvider.CreateScope();
+
+        // Assert
+        serviceDescriptor.ShouldNotBeNull();
+        serviceDescriptor.ImplementationType.ShouldBe(typeof(WebApplicationHandlers));
+        serviceDescriptor.Lifetime.ShouldBe(ServiceLifetime.Scoped);
+        scope.ServiceProvider.GetRequiredService<IWebApplicationHandlers>().ShouldBeOfType<WebApplicationHandlers>();
     }
 
     [Fact]

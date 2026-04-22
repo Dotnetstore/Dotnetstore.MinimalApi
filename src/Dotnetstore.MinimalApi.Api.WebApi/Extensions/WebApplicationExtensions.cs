@@ -1,4 +1,7 @@
-﻿namespace Dotnetstore.MinimalApi.Api.WebApi.Extensions;
+﻿using Asp.Versioning;
+using Dotnetstore.MinimalApi.Api.WebApi.Handlers;
+
+namespace Dotnetstore.MinimalApi.Api.WebApi.Extensions;
 
 internal static class WebApplicationExtensions
 {
@@ -19,6 +22,18 @@ internal static class WebApplicationExtensions
                             .AllowAnyHeader();
                     });
             });
+
+        builder.Services
+            .AddApiVersioning(options =>
+            {
+                options.DefaultApiVersion = new ApiVersion(1, 0);
+                options.ReportApiVersions = true;
+                options.AssumeDefaultVersionWhenUnspecified = true;
+                options.ApiVersionReader = new HeaderApiVersionReader("api-version");
+            });
+
+        builder.Services
+            .AddScoped<IWebApplicationHandlers, WebApplicationHandlers>();
         
         return builder;
     }
