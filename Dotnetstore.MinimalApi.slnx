@@ -1,4 +1,9 @@
 <Solution>
+  <Folder Name="/Api/" />
+  <Folder Name="/Api/WebApi/">
+    <Project Path="src/Dotnetstore.MinimalApi.Api.WebApi/Dotnetstore.MinimalApi.Api.WebApi.csproj" />
+    <Project Path="tests/Dotnetstore.MinimalApi.Api.WebApi.Tests/Dotnetstore.MinimalApi.Api.WebApi.Tests.csproj" />
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".gitignore" />
     <File Path="Directory.Build.props" />

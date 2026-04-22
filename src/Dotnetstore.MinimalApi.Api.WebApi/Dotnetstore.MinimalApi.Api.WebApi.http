@@ -1,0 +1,6 @@
+@Dotnetstore.MinimalApi.Api.WebApi_HostAddress = http://localhost:5126
+
+GET {{Dotnetstore.MinimalApi.Api.WebApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

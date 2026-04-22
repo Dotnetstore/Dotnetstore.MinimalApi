@@ -1,0 +1,51 @@
+﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+
+namespace Dotnetstore.MinimalApi.Api.WebApi.Tests.Helpers;
+
+internal static class TestHttp
+{
+    internal const string HttpLocalhost = "http://localhost";
+    internal const string HttpsLocalhost = "https://localhost";
+    internal const string OpenApiDocumentPath = "/openapi/v1.json";
+
+    internal static HttpClient CreateClient(WebApplication app, string baseAddress)
+    {
+        var client = app.GetTestClient();
+        client.BaseAddress = new Uri(baseAddress);
+
+        return client;
+    }
+
+    internal static HttpClient CreateClient<TEntryPoint>(WebApplicationFactory<TEntryPoint> factory, string baseAddress)
+        where TEntryPoint : class =>
+        factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri(baseAddress),
+            AllowAutoRedirect = false
+        });
+
+    internal static HttpRequestMessage CreateOriginRequest(HttpMethod method, string requestUri, string origin)
+    {
+        var request = new HttpRequestMessage(method, requestUri);
+        request.Headers.Add("Origin", origin);
+
+        return request;
+    }
+
+    internal static HttpRequestMessage CreateCorsPreflightRequest(
+        string requestUri,
+        string origin,
+        string requestedMethod,
+        string requestedHeaders)
+    {
+        var request = CreateOriginRequest(HttpMethod.Options, requestUri, origin);
+        request.Headers.Add("Access-Control-Request-Method", requestedMethod);
+        request.Headers.Add("Access-Control-Request-Headers", requestedHeaders);
+
+        return request;
+    }
+}
+
+
