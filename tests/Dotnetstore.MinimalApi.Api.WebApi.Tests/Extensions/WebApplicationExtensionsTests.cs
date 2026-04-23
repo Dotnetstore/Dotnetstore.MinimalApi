@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using Asp.Versioning;
+using Dotnetstore.MinimalApi.Api.WebApi.Endpoints;
 using Dotnetstore.MinimalApi.Api.WebApi.Handlers;
 using Dotnetstore.MinimalApi.Api.WebApi.Tests.Helpers;
 using Dotnetstore.MinimalApi.Api.WebApi.Extensions;
@@ -13,6 +14,9 @@ using Shouldly;
 
 namespace Dotnetstore.MinimalApi.Api.WebApi.Tests.Extensions;
 
+/// <summary>
+/// Covers <c>WebApplicationExtensions</c> and verifies service registration plus middleware pipeline behavior.
+/// </summary>
 public sealed class WebApplicationExtensionsTests
 {
     private const string AllowedOrigin = "http://localhost:7000";
@@ -47,7 +51,7 @@ public sealed class WebApplicationExtensionsTests
         using var serviceProvider = builder.Services.BuildServiceProvider();
         var options = serviceProvider.GetRequiredService<IOptions<ApiVersioningOptions>>().Value;
         var request = new DefaultHttpContext().Request;
-        request.Headers.Append("api-version", "1.0");
+        request.Headers.Append(TestHttp.ApiVersionHeaderName, "1.0");
 
         // Assert
         options.DefaultApiVersion.ShouldBe(new ApiVersion(1, 0));
@@ -55,7 +59,7 @@ public sealed class WebApplicationExtensionsTests
         options.AssumeDefaultVersionWhenUnspecified.ShouldBeTrue();
 
         var versionReader = options.ApiVersionReader.ShouldBeOfType<HeaderApiVersionReader>();
-        versionReader.HeaderNames.ShouldHaveSingleItem().ShouldBe("api-version");
+        versionReader.HeaderNames.ShouldHaveSingleItem().ShouldBe(TestHttp.ApiVersionHeaderName);
         versionReader.Read(request).ShouldHaveSingleItem().ShouldBe("1.0");
     }
 
@@ -82,6 +86,31 @@ public sealed class WebApplicationExtensionsTests
         serviceDescriptor.ImplementationType.ShouldBe(typeof(WebApplicationHandlers));
         serviceDescriptor.Lifetime.ShouldBe(ServiceLifetime.Scoped);
         scope.ServiceProvider.GetRequiredService<IWebApplicationHandlers>().ShouldBeOfType<WebApplicationHandlers>();
+    }
+
+    [Fact]
+    public void RegisterWebApi_RegistersTestEndpoints_AsScopedService()
+    {
+        // Arrange
+        var builder = CreateBuilder();
+
+        // Act
+        builder.RegisterWebApi();
+
+        var serviceDescriptor = builder.Services.SingleOrDefault(service =>
+            service.ServiceType == typeof(ITestEndpoints));
+
+        using var serviceProvider = builder.Services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateScopes = true
+        });
+        using var scope = serviceProvider.CreateScope();
+
+        // Assert
+        serviceDescriptor.ShouldNotBeNull();
+        serviceDescriptor.ImplementationType.ShouldBe(typeof(TestEndpoints));
+        serviceDescriptor.Lifetime.ShouldBe(ServiceLifetime.Scoped);
+        scope.ServiceProvider.GetRequiredService<ITestEndpoints>().ShouldBeOfType<TestEndpoints>();
     }
 
     [Fact]

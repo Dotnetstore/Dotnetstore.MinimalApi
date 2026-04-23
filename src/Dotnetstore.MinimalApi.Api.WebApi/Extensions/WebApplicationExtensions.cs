@@ -1,4 +1,5 @@
 ﻿using Asp.Versioning;
+using Dotnetstore.MinimalApi.Api.WebApi.Endpoints;
 using Dotnetstore.MinimalApi.Api.WebApi.Handlers;
 
 namespace Dotnetstore.MinimalApi.Api.WebApi.Extensions;
@@ -33,7 +34,8 @@ internal static class WebApplicationExtensions
             });
 
         builder.Services
-            .AddScoped<IWebApplicationHandlers, WebApplicationHandlers>();
+            .AddScoped<IWebApplicationHandlers, WebApplicationHandlers>()
+            .AddScoped<ITestEndpoints, TestEndpoints>();
         
         return builder;
     }

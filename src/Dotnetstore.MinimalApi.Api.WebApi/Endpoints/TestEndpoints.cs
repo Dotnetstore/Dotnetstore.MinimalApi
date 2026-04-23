@@ -1,0 +1,14 @@
+﻿using Dotnetstore.MinimalApi.Api.WebApi.Handlers;
+
+namespace Dotnetstore.MinimalApi.Api.WebApi.Endpoints;
+
+internal sealed class TestEndpoints(
+    IWebApplicationHandlers webApplicationHandlers) : ITestEndpoints
+{
+    void ITestEndpoints.MapEndpoints(WebApplication app)
+    {
+        app.MapGet("/test", () => "Hello World!")
+            .WithApiVersionSet(webApplicationHandlers.GetApiVersionSet(app))
+            .MapToApiVersion(1.0);
+    }
+}

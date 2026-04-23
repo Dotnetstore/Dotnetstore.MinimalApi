@@ -6,6 +6,7 @@ namespace Dotnetstore.MinimalApi.Api.WebApi.Tests.Helpers;
 
 internal static class TestHttp
 {
+    internal const string ApiVersionHeaderName = "api-version";
     internal const string HttpLocalhost = "http://localhost";
     internal const string HttpsLocalhost = "https://localhost";
     internal const string OpenApiDocumentPath = "/openapi/v1.json";
@@ -30,6 +31,14 @@ internal static class TestHttp
     {
         var request = new HttpRequestMessage(method, requestUri);
         request.Headers.Add("Origin", origin);
+
+        return request;
+    }
+
+    internal static HttpRequestMessage CreateVersionedRequest(HttpMethod method, string requestUri, string apiVersion)
+    {
+        var request = new HttpRequestMessage(method, requestUri);
+        request.Headers.Add(ApiVersionHeaderName, apiVersion);
 
         return request;
     }

@@ -1,3 +1,4 @@
+using Dotnetstore.MinimalApi.Api.WebApi.Endpoints;
 using Dotnetstore.MinimalApi.Api.WebApi.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -7,9 +8,15 @@ builder
     .RegisterWebApi();
 
 var app = builder.Build();
+app.RegisterMiddlewares();
+
+using (var scope = app.Services.CreateScope())
+{
+    var testEndpoints = scope.ServiceProvider.GetRequiredService<ITestEndpoints>();
+    testEndpoints.MapEndpoints(app);
+}
 
 await app
-    .RegisterMiddlewares()
     .RunWebApiAsync(cancellationToken);
 
 public partial class Program;
