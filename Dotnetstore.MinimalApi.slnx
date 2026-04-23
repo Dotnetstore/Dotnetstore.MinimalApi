@@ -5,8 +5,13 @@
     <Project Path="tests/Dotnetstore.MinimalApi.Api.WebApi.Tests/Dotnetstore.MinimalApi.Api.WebApi.Tests.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">
+    <File Path=".dockerignore" />
     <File Path=".gitignore" />
+    <File Path=".release-please-config.json" />
+    <File Path=".release-please-manifest.json" />
+    <File Path="CHANGELOG.md" />
     <File Path="Directory.Build.props" />
+    <File Path="Dockerfile" />
     <File Path="global.json" />
     <File Path="LICENSE" />
     <File Path="README.md" />

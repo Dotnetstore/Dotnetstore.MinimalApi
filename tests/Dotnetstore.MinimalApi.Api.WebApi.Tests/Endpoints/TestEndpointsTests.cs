@@ -1,10 +1,12 @@
 ﻿using System.Net;
 using Asp.Versioning;
 using Dotnetstore.MinimalApi.Api.WebApi.Endpoints;
+using Dotnetstore.MinimalApi.Api.WebApi.Filters;
 using Dotnetstore.MinimalApi.Api.WebApi.Handlers;
 using Dotnetstore.MinimalApi.Api.WebApi.Tests.Helpers;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Shouldly;
 
 namespace Dotnetstore.MinimalApi.Api.WebApi.Tests.Endpoints;
@@ -69,6 +71,56 @@ public sealed class TestEndpointsTests
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await response.Content.ReadAsStringAsync(cancellationToken)).ShouldBe("Hello World!");
+    }
+
+    [Fact]
+    public async Task MapEndpoints_ShouldExecuteLogPerformanceFilter_WhenHandlingV1Request()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var logger = new TestLogger<LogPerformanceFilter>();
+        await using var app = TestApplication.CreateVersionedApp(services =>
+            services.AddSingleton<ILogger<LogPerformanceFilter>>(logger));
+        ITestEndpoints sut = new TestEndpoints(new WebApplicationHandlers());
+        sut.MapEndpoints(app);
+        await app.StartAsync(cancellationToken);
+
+        using var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+        using var request = TestHttp.CreateVersionedRequest(HttpMethod.Get, TestPath, "1.0");
+
+        // Act
+        var response = await client.SendAsync(request, cancellationToken);
+
+        var entry = logger.Entries.ShouldHaveSingleItem();
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        entry.LogLevel.ShouldBe(LogLevel.Information);
+        entry.Message.ShouldContain("Endpoint execution time:");
+        entry.Message.ShouldContain(" ms");
+    }
+
+    private sealed record LogEntry(LogLevel LogLevel, string Message);
+
+    private sealed class TestLogger<T> : ILogger<T>
+    {
+        private readonly List<LogEntry> _entries = [];
+
+        internal IReadOnlyList<LogEntry> Entries => _entries;
+
+        IDisposable? ILogger.BeginScope<TState>(TState state) where TState : default => null;
+
+        bool ILogger.IsEnabled(LogLevel logLevel) => true;
+
+        void ILogger.Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            _entries.Add(new LogEntry(logLevel, formatter(state, exception)));
+        }
     }
 }
 
