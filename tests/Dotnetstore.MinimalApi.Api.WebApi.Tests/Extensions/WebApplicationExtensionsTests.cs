@@ -6,6 +6,7 @@ using Dotnetstore.MinimalApi.Api.WebApi.Tests.Helpers;
 using Dotnetstore.MinimalApi.Api.WebApi.Extensions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -21,6 +22,8 @@ public sealed class WebApplicationExtensionsTests
 {
     private const string AllowedOrigin = "http://localhost:7000";
     private const string DisallowedOrigin = "http://localhost:7001";
+    private const string DevelopmentHttpsLocalhost = "https://localhost:7201";
+    private const string HttpsExampleCom = "https://example.com";
     private const string OrdersPath = "/orders";
     private const string PingPath = "/ping";
     private const string ProductionEnvironment = "Production";
@@ -114,6 +117,58 @@ public sealed class WebApplicationExtensionsTests
     }
 
     [Fact]
+    public void RegisterWebApi_ShouldConfigureHstsOptions_WhenCalled()
+    {
+        // Arrange
+        var builder = CreateBuilder();
+
+        // Act
+        builder.RegisterWebApi();
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<HstsOptions>>().Value;
+
+        // Assert
+        options.Preload.ShouldBeTrue();
+        options.IncludeSubDomains.ShouldBeTrue();
+        options.MaxAge.ShouldBe(TimeSpan.FromDays(30));
+    }
+
+    [Fact]
+    public void RegisterWebApi_ShouldConfigureHttpsRedirection_WhenEnvironmentIsDevelopment()
+    {
+        // Arrange
+        var builder = CreateBuilder(Environments.Development);
+
+        // Act
+        builder.RegisterWebApi();
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<HttpsRedirectionOptions>>().Value;
+
+        // Assert
+        options.RedirectStatusCode.ShouldBe(StatusCodes.Status307TemporaryRedirect);
+        options.HttpsPort.ShouldBe(7201);
+    }
+
+    [Fact]
+    public void RegisterWebApi_ShouldConfigureHttpsRedirection_WhenEnvironmentIsProduction()
+    {
+        // Arrange
+        var builder = CreateBuilder(Environments.Production);
+
+        // Act
+        builder.RegisterWebApi();
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<HttpsRedirectionOptions>>().Value;
+
+        // Assert
+        options.RedirectStatusCode.ShouldBe(StatusCodes.Status308PermanentRedirect);
+        options.HttpsPort.ShouldBe(443);
+    }
+
+    [Fact]
     public async Task RegisterMiddlewares_MapsOpenApi_InDevelopment()
     {
         // Arrange
@@ -157,7 +212,25 @@ public sealed class WebApplicationExtensionsTests
         await using var app = await CreateStartedAppAsync(
             Environments.Production,
             cancellationToken,
-            configureServices: services => services.AddHttpsRedirection(options => options.HttpsPort = 443),
+            configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
+        var client = TestHttp.CreateClient(app, TestHttp.HttpLocalhost);
+
+        // Act
+        var response = await client.GetAsync(PingPath, cancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.PermanentRedirect);
+        response.Headers.Location?.ToString().ShouldBe($"{TestHttp.HttpsLocalhost}{PingPath}");
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldUseDevelopmentHttpsRedirection_WhenEnvironmentIsDevelopment()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Development,
+            cancellationToken,
             configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
         var client = TestHttp.CreateClient(app, TestHttp.HttpLocalhost);
 
@@ -166,7 +239,45 @@ public sealed class WebApplicationExtensionsTests
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.TemporaryRedirect);
-        response.Headers.Location?.ToString().ShouldBe($"{TestHttp.HttpsLocalhost}{PingPath}");
+        response.Headers.Location?.ToString().ShouldBe($"{DevelopmentHttpsLocalhost}{PingPath}");
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldAddHstsHeader_WhenEnvironmentIsProduction()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Production,
+            cancellationToken,
+            configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
+        var client = TestHttp.CreateClient(app, HttpsExampleCom);
+
+        // Act
+        var response = await client.GetAsync(PingPath, cancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Headers.GetValues("Strict-Transport-Security").Single().ShouldBe("max-age=2592000; includeSubDomains; preload");
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldNotAddHstsHeader_WhenEnvironmentIsDevelopment()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Development,
+            cancellationToken,
+            configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
+        var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+
+        // Act
+        var response = await client.GetAsync(PingPath, cancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Headers.Contains("Strict-Transport-Security").ShouldBeFalse();
     }
 
     [Fact]
