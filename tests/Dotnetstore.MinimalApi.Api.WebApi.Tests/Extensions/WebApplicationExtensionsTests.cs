@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using System.Threading.RateLimiting;
 using Asp.Versioning;
 using Dotnetstore.MinimalApi.Api.WebApi.Endpoints;
 using Dotnetstore.MinimalApi.Api.WebApi.Handlers;
@@ -7,6 +8,7 @@ using Dotnetstore.MinimalApi.Api.WebApi.Extensions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -24,9 +26,11 @@ public sealed class WebApplicationExtensionsTests
     private const string DisallowedOrigin = "http://localhost:7001";
     private const string DevelopmentHttpsLocalhost = "https://localhost:7201";
     private const string HttpsExampleCom = "https://example.com";
+    private const string LimitedPath = "/limited";
     private const string OrdersPath = "/orders";
     private const string PingPath = "/ping";
     private const string ProductionEnvironment = "Production";
+    private const string TooManyRequestsMessage = "Too many requests. Please try again later.";
     private const string TraceHeaderName = "X-Trace-Id";
 
     [Fact]
@@ -166,6 +170,24 @@ public sealed class WebApplicationExtensionsTests
         // Assert
         options.RedirectStatusCode.ShouldBe(StatusCodes.Status308PermanentRedirect);
         options.HttpsPort.ShouldBe(443);
+    }
+
+    [Fact]
+    public void RegisterWebApi_ShouldConfigureRateLimiterOptions_WhenCalled()
+    {
+        // Arrange
+        var builder = CreateBuilder();
+
+        // Act
+        builder.RegisterWebApi();
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<RateLimiterOptions>>().Value;
+
+        // Assert
+        options.RejectionStatusCode.ShouldBe((int)HttpStatusCode.TooManyRequests);
+        options.OnRejected.ShouldNotBeNull();
+        options.GlobalLimiter.ShouldNotBeNull();
     }
 
     [Fact]
@@ -370,6 +392,81 @@ public sealed class WebApplicationExtensionsTests
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         response.Headers.Contains("Access-Control-Allow-Origin").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldRejectRequests_WhenShortLimitIsExceeded()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Production,
+            cancellationToken,
+            configureRoutes: webApplication => webApplication
+                .MapGet(LimitedPath, async (CancellationToken requestCancellationToken) =>
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(250), requestCancellationToken);
+                    return Results.Ok("pong");
+                })
+                .RequireRateLimiting("ShortLimit"));
+        using var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+
+        // Act
+        var requests = Enumerable.Range(0, 11)
+            .Select(_ => client.GetAsync(LimitedPath, cancellationToken))
+            .ToArray();
+        var responses = await Task.WhenAll(requests);
+
+        var rejectedResponses = responses
+            .Where(response => response.StatusCode == HttpStatusCode.TooManyRequests)
+            .ToList();
+        var successfulResponses = responses
+            .Where(response => response.StatusCode == HttpStatusCode.OK)
+            .ToList();
+
+        // Assert
+        rejectedResponses.Count.ShouldBe(1);
+        successfulResponses.Count.ShouldBe(10);
+
+        foreach (var rejectedResponse in rejectedResponses)
+        {
+            (await rejectedResponse.Content.ReadAsStringAsync(cancellationToken)).ShouldBe(TooManyRequestsMessage);
+        }
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldRejectRequestsUsingGlobalLimiter_WhenEndpointHasNoExplicitPolicy()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Production,
+            cancellationToken,
+            configureServices: services => services.PostConfigure<RateLimiterOptions>(options =>
+            {
+                options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = 2,
+                            QueueLimit = 0,
+                            Window = TimeSpan.FromMinutes(1)
+                        }));
+            }),
+            configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
+        using var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+
+        // Act
+        var firstResponse = await client.GetAsync(PingPath, cancellationToken);
+        var secondResponse = await client.GetAsync(PingPath, cancellationToken);
+        var thirdResponse = await client.GetAsync(PingPath, cancellationToken);
+
+        // Assert
+        firstResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        secondResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        thirdResponse.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        (await thirdResponse.Content.ReadAsStringAsync(cancellationToken)).ShouldBe(TooManyRequestsMessage);
     }
 
     [Fact]

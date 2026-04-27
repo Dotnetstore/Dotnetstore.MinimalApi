@@ -1,6 +1,9 @@
-﻿using Asp.Versioning;
+﻿using System.Net;
+using System.Threading.RateLimiting;
+using Asp.Versioning;
 using Dotnetstore.MinimalApi.Api.WebApi.Endpoints;
 using Dotnetstore.MinimalApi.Api.WebApi.Handlers;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Dotnetstore.MinimalApi.Api.WebApi.Extensions;
 
@@ -15,7 +18,8 @@ internal static class WebApplicationExtensions
             builder
                 .SetupHsts()
                 .SetupCors()
-                .SetupVersioning();
+                .SetupVersioning()
+                .SetupRateLimiter();
 
             builder.Services
                 .AddOpenApi()
@@ -89,6 +93,39 @@ internal static class WebApplicationExtensions
         
             return builder;
         }
+
+        private WebApplicationBuilder SetupRateLimiter()
+        {            
+            builder.Services
+                .AddRateLimiter(options =>
+                {
+                    options.RejectionStatusCode = (int)HttpStatusCode.TooManyRequests;
+                    options.OnRejected = async (context, token) =>
+                    {
+                        await context.HttpContext.Response.WriteAsync("Too many requests. Please try again later.", token);
+                    };
+                    options.GlobalLimiter = PartitionedRateLimiter.
+                        Create<HttpContext, string>(httpContext =>
+                            RateLimitPartition.GetFixedWindowLimiter(
+                                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                                factory: _ => new FixedWindowRateLimiterOptions
+                                {
+                                    QueueLimit = 10,
+                                    PermitLimit = 50,
+                                    Window = TimeSpan.FromSeconds(15)
+                                }));
+                    options.AddPolicy("ShortLimit", context =>
+                        RateLimitPartition.GetFixedWindowLimiter(
+                            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                            factory: partition => new FixedWindowRateLimiterOptions
+                            {
+                                PermitLimit = 10,
+                                Window = TimeSpan.FromSeconds(15)
+                            }));
+                });
+            
+            return builder;
+        }
     }
 
     extension(WebApplication app)
@@ -108,7 +145,8 @@ internal static class WebApplicationExtensions
 
             app
                 .UseHttpsRedirection()
-                .UseCors(AllowDotnetstoreSpecificOrigins);
+                .UseCors(AllowDotnetstoreSpecificOrigins)
+                .UseRateLimiter();
         
             return app;
         }
