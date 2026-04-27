@@ -1,4 +1,5 @@
-﻿using Dotnetstore.MinimalApi.Api.WebApi.Exceptions;
+﻿using System.ComponentModel.DataAnnotations;
+using Dotnetstore.MinimalApi.Api.WebApi.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Shouldly;
@@ -40,7 +41,7 @@ public sealed class DefaultExceptionHandlerTests
         var problemDetailsService = new CapturingProblemDetailsService();
         var logger = new TestLogger<DefaultExceptionHandler>();
         var sut = new DefaultExceptionHandler(problemDetailsService, logger);
-        var exception = new ApplicationException("Bad input.");
+        var exception = new ValidationException("Bad input.");
         var httpContext = CreateHttpContext(HttpMethods.Post, "/test");
 
         // Act
@@ -53,15 +54,39 @@ public sealed class DefaultExceptionHandlerTests
         handled.ShouldBeTrue();
         context.HttpContext.ShouldBeSameAs(httpContext);
         context.Exception.ShouldBeSameAs(exception);
-        problemDetails.Type.ShouldBe(nameof(ApplicationException));
+        problemDetails.Type.ShouldBe("bad-request");
         problemDetails.Status.ShouldBe(StatusCodes.Status400BadRequest);
-        problemDetails.Title.ShouldBe("An error occurred while processing your request.");
+        problemDetails.Title.ShouldBe("The request is invalid.");
         problemDetails.Detail.ShouldBe(exception.Message);
         problemDetails.Instance.ShouldBe("POST /test");
         entry.LogLevel.ShouldBe(LogLevel.Error);
         entry.EventId.ShouldBe(default);
         entry.Exception.ShouldBeSameAs(exception);
         entry.Message.ShouldBe("An unhandled exception occurred while processing the request.");
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_ShouldHideInternalDetails_WhenExceptionMapsToInternalServerError()
+    {
+        // Arrange
+        var problemDetailsService = new CapturingProblemDetailsService();
+        var logger = new TestLogger<DefaultExceptionHandler>();
+        var sut = new DefaultExceptionHandler(problemDetailsService, logger);
+        var exception = new InvalidOperationException("Database connection details should stay internal.");
+        var httpContext = CreateHttpContext(HttpMethods.Get, "/fail");
+
+        // Act
+        var handled = await sut.TryHandleAsync(httpContext, exception, TestContext.Current.CancellationToken);
+        var problemDetails = problemDetailsService.CapturedContext.ShouldNotBeNull().ProblemDetails.ShouldNotBeNull();
+
+        // Assert
+        handled.ShouldBeTrue();
+        problemDetails.Type.ShouldBe("internal-server-error");
+        problemDetails.Status.ShouldBe(StatusCodes.Status500InternalServerError);
+        problemDetails.Title.ShouldBe("An unexpected error occurred while processing your request.");
+        var detail = problemDetails.Detail.ShouldNotBeNull();
+        detail.ShouldBe("An unexpected error occurred.");
+        detail.ShouldNotContain("Database connection details");
     }
 
     [Fact]
@@ -86,7 +111,7 @@ public sealed class DefaultExceptionHandlerTests
 
     public static TheoryData<Exception, int> ExceptionMappings() => new()
     {
-        { new ApplicationException("Application exception."), StatusCodes.Status400BadRequest },
+        { new ValidationException("Validation failed."), StatusCodes.Status400BadRequest },
         { new KeyNotFoundException("Missing resource."), StatusCodes.Status404NotFound },
         { new UnauthorizedAccessException("Unauthorized."), StatusCodes.Status401Unauthorized },
         { new InvalidOperationException("Unexpected failure."), StatusCodes.Status500InternalServerError }

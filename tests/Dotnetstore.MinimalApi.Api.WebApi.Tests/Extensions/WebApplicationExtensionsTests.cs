@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Threading.RateLimiting;
 using Asp.Versioning;
+using Dotnetstore.MinimalApi.Api.WebApi.Configuration;
 using Dotnetstore.MinimalApi.Api.WebApi.Endpoints;
 using Dotnetstore.MinimalApi.Api.WebApi.Exceptions;
 using Dotnetstore.MinimalApi.Api.WebApi.Handlers;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -24,7 +26,6 @@ namespace Dotnetstore.MinimalApi.Api.WebApi.Tests.Extensions;
 /// </summary>
 public sealed class WebApplicationExtensionsTests
 {
-    private const string AllowedOrigin = "http://localhost:7000";
     private const string DisallowedOrigin = "http://localhost:7001";
     private const string DevelopmentHttpsLocalhost = "https://localhost:7201";
     private const string HttpsExampleCom = "https://example.com";
@@ -32,8 +33,9 @@ public sealed class WebApplicationExtensionsTests
     private const string OrdersPath = "/orders";
     private const string PingPath = "/ping";
     private const string ProductionEnvironment = "Production";
-    private const string TooManyRequestsMessage = "Too many requests. Please try again later.";
     private const string TraceHeaderName = "X-Trace-Id";
+    private static readonly string AllowedOrigin = WebApiDefaultValues.CorsAllowedOrigins.Single();
+    private static readonly string TooManyRequestsMessage = new WebApiRateLimitingOptions().RejectionMessage;
 
     [Fact]
     public void RegisterWebApi_ReturnsSameBuilderInstance()
@@ -73,7 +75,7 @@ public sealed class WebApplicationExtensionsTests
     }
 
     [Fact]
-    public void RegisterWebApi_RegistersWebApplicationHandlers_AsScopedService()
+    public void RegisterWebApi_RegistersWebApplicationHandlers_AsSingletonService()
     {
         // Arrange
         var builder = CreateBuilder();
@@ -84,21 +86,17 @@ public sealed class WebApplicationExtensionsTests
         var serviceDescriptor = builder.Services.SingleOrDefault(service =>
             service.ServiceType == typeof(IWebApplicationHandlers));
 
-        using var serviceProvider = builder.Services.BuildServiceProvider(new ServiceProviderOptions
-        {
-            ValidateScopes = true
-        });
-        using var scope = serviceProvider.CreateScope();
+        using var serviceProvider = builder.Services.BuildServiceProvider();
 
         // Assert
         serviceDescriptor.ShouldNotBeNull();
         serviceDescriptor.ImplementationType.ShouldBe(typeof(WebApplicationHandlers));
-        serviceDescriptor.Lifetime.ShouldBe(ServiceLifetime.Scoped);
-        scope.ServiceProvider.GetRequiredService<IWebApplicationHandlers>().ShouldBeOfType<WebApplicationHandlers>();
+        serviceDescriptor.Lifetime.ShouldBe(ServiceLifetime.Singleton);
+        serviceProvider.GetRequiredService<IWebApplicationHandlers>().ShouldBeOfType<WebApplicationHandlers>();
     }
 
     [Fact]
-    public void RegisterWebApi_RegistersTestEndpoints_AsScopedService()
+    public void RegisterWebApi_RegistersTestEndpoints_AsSingletonService()
     {
         // Arrange
         var builder = CreateBuilder();
@@ -109,17 +107,13 @@ public sealed class WebApplicationExtensionsTests
         var serviceDescriptor = builder.Services.SingleOrDefault(service =>
             service.ServiceType == typeof(ITestEndpoints));
 
-        using var serviceProvider = builder.Services.BuildServiceProvider(new ServiceProviderOptions
-        {
-            ValidateScopes = true
-        });
-        using var scope = serviceProvider.CreateScope();
+        using var serviceProvider = builder.Services.BuildServiceProvider();
 
         // Assert
         serviceDescriptor.ShouldNotBeNull();
         serviceDescriptor.ImplementationType.ShouldBe(typeof(TestEndpoints));
-        serviceDescriptor.Lifetime.ShouldBe(ServiceLifetime.Scoped);
-        scope.ServiceProvider.GetRequiredService<ITestEndpoints>().ShouldBeOfType<TestEndpoints>();
+        serviceDescriptor.Lifetime.ShouldBe(ServiceLifetime.Singleton);
+        serviceProvider.GetRequiredService<ITestEndpoints>().ShouldBeOfType<TestEndpoints>();
     }
 
     [Fact]
@@ -211,6 +205,164 @@ public sealed class WebApplicationExtensionsTests
         options.RejectionStatusCode.ShouldBe((int)HttpStatusCode.TooManyRequests);
         options.OnRejected.ShouldNotBeNull();
         options.GlobalLimiter.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void RegisterWebApi_ShouldBindCorsAndRateLimitingOptions_FromConfiguration()
+    {
+        // Arrange
+        const string configuredOrigin = "http://localhost:7100";
+        const string configuredMethod = "DELETE";
+        const string configuredMessage = "Custom throttling message.";
+        const string configuredPartitionFallback = "anonymous-client";
+        var builder = CreateBuilder();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [$"{WebApiConfiguration.OptionsSectionName}:Cors:AllowedOrigins:0"] = configuredOrigin,
+            [$"{WebApiConfiguration.OptionsSectionName}:Cors:AllowedMethods:0"] = configuredMethod,
+            [$"{WebApiConfiguration.OptionsSectionName}:RateLimiting:RejectionMessage"] = configuredMessage,
+            [$"{WebApiConfiguration.OptionsSectionName}:RateLimiting:PartitionKeyFallback"] = configuredPartitionFallback
+        });
+
+        // Act
+        builder.RegisterWebApi();
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var webApiOptions = serviceProvider.GetRequiredService<IOptions<WebApiOptions>>().Value;
+        var allowedMethods = webApiOptions.Cors.AllowedMethods.ShouldNotBeNull();
+
+        // Assert
+        webApiOptions.Cors.AllowedOrigins.ShouldHaveSingleItem().ShouldBe(configuredOrigin);
+        allowedMethods.ShouldContain(configuredMethod);
+        webApiOptions.RateLimiting.RejectionMessage.ShouldBe(configuredMessage);
+        webApiOptions.RateLimiting.PartitionKeyFallback.ShouldBe(configuredPartitionFallback);
+    }
+
+    [Fact]
+    public async Task RegisterWebApi_ShouldFailStartup_WhenCorsAllowedOriginsIsEmpty()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        // Act
+        var exception = await Should.ThrowAsync<OptionsValidationException>(async () =>
+        {
+            await using var app = CreateApp(
+                Environments.Production,
+                configureConfiguration: configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [$"{WebApiConfiguration.OptionsSectionName}:Cors:AllowedOrigins:0"] = " "
+                }),
+                configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
+
+            await app.StartAsync(cancellationToken);
+        });
+
+        // Assert
+        exception.Message.ShouldContain("WebApi:Cors:AllowedOrigins");
+    }
+
+    [Fact]
+    public async Task RegisterWebApi_ShouldFailStartup_WhenRateLimiterRejectionMessageIsBlank()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        // Act
+        var exception = await Should.ThrowAsync<OptionsValidationException>(async () =>
+        {
+            await using var app = CreateApp(
+                Environments.Production,
+                configureConfiguration: configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [$"{WebApiConfiguration.OptionsSectionName}:RateLimiting:RejectionMessage"] = "   "
+                }),
+                configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
+
+            await app.StartAsync(cancellationToken);
+        });
+
+        // Assert
+        exception.Message.ShouldContain("WebApi:RateLimiting:RejectionMessage");
+    }
+
+    [Fact]
+    public async Task RegisterWebApi_ShouldFailStartup_WhenRateLimiterPermitLimitIsNotPositive()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        // Act
+        var exception = await Should.ThrowAsync<OptionsValidationException>(async () =>
+        {
+            await using var app = CreateApp(
+                Environments.Production,
+                configureConfiguration: configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [$"{WebApiConfiguration.OptionsSectionName}:RateLimiting:GlobalPermitLimit"] = "0"
+                }),
+                configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
+
+            await app.StartAsync(cancellationToken);
+        });
+
+        // Assert
+        exception.Message.ShouldContain("WebApi:RateLimiting:GlobalPermitLimit");
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldAllowConfiguredCorsOrigin_FromConfiguration()
+    {
+        // Arrange
+        const string configuredOrigin = "http://localhost:7100";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Production,
+            cancellationToken,
+            configureConfiguration: configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{WebApiConfiguration.OptionsSectionName}:Cors:AllowedOrigins:0"] = configuredOrigin
+            }),
+            configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
+        using var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+        using var configuredOriginRequest = TestHttp.CreateOriginRequest(HttpMethod.Get, PingPath, configuredOrigin);
+        using var defaultOriginRequest = TestHttp.CreateOriginRequest(HttpMethod.Get, PingPath, AllowedOrigin);
+
+        // Act
+        var configuredOriginResponse = await client.SendAsync(configuredOriginRequest, cancellationToken);
+        var defaultOriginResponse = await client.SendAsync(defaultOriginRequest, cancellationToken);
+
+        // Assert
+        configuredOriginResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        configuredOriginResponse.Headers.GetValues("Access-Control-Allow-Origin").Single().ShouldBe(configuredOrigin);
+        defaultOriginResponse.Headers.Contains("Access-Control-Allow-Origin").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldAllowConfiguredCorsMethod_FromConfiguration_OnPreflightRequest()
+    {
+        // Arrange
+        const string configuredOrigin = "http://localhost:7100";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Production,
+            cancellationToken,
+            configureConfiguration: configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{WebApiConfiguration.OptionsSectionName}:Cors:AllowedOrigins:0"] = configuredOrigin,
+                [$"{WebApiConfiguration.OptionsSectionName}:Cors:AllowedMethods:0"] = HttpMethod.Delete.Method
+            }),
+            configureRoutes: webApplication => webApplication.MapDelete(OrdersPath, () => Results.Ok()));
+        using var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+        using var request = TestHttp.CreateCorsPreflightRequest(OrdersPath, configuredOrigin, HttpMethod.Delete.Method, TraceHeaderName);
+
+        // Act
+        var response = await client.SendAsync(request, cancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        response.Headers.GetValues("Access-Control-Allow-Origin").Single().ShouldBe(configuredOrigin);
+        response.Headers.GetValues("Access-Control-Allow-Methods").Single().ShouldContain(HttpMethod.Delete.Method);
     }
 
     [Fact]
@@ -431,7 +583,7 @@ public sealed class WebApplicationExtensionsTests
                     await Task.Delay(TimeSpan.FromMilliseconds(250), requestCancellationToken);
                     return Results.Ok("pong");
                 })
-                .RequireRateLimiting("ShortLimit"));
+                .RequireRateLimiting(WebApiConfiguration.ShortRateLimitPolicyName));
         using var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
 
         // Act
@@ -455,6 +607,43 @@ public sealed class WebApplicationExtensionsTests
         {
             (await rejectedResponse.Content.ReadAsStringAsync(cancellationToken)).ShouldBe(TooManyRequestsMessage);
         }
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldUseConfiguredRateLimiterRejectionMessage_WhenRequestIsRejected()
+    {
+        // Arrange
+        const string configuredMessage = "Please wait before trying again.";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Production,
+            cancellationToken,
+            configureConfiguration: configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{WebApiConfiguration.OptionsSectionName}:RateLimiting:ShortPermitLimit"] = "1",
+                [$"{WebApiConfiguration.OptionsSectionName}:RateLimiting:ShortQueueLimit"] = "0",
+                [$"{WebApiConfiguration.OptionsSectionName}:RateLimiting:ShortWindowSeconds"] = "60",
+                [$"{WebApiConfiguration.OptionsSectionName}:RateLimiting:RejectionMessage"] = configuredMessage,
+                [$"{WebApiConfiguration.OptionsSectionName}:RateLimiting:PartitionKeyFallback"] = "configured-fallback"
+            }),
+            configureRoutes: webApplication => webApplication
+                .MapGet(LimitedPath, async (CancellationToken requestCancellationToken) =>
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(250), requestCancellationToken);
+                    return Results.Ok("pong");
+                })
+                .RequireRateLimiting(WebApiConfiguration.ShortRateLimitPolicyName));
+        using var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+
+        // Act
+        var responses = await Task.WhenAll(
+            client.GetAsync(LimitedPath, cancellationToken),
+            client.GetAsync(LimitedPath, cancellationToken));
+
+        var rejectedResponse = responses.Single(response => response.StatusCode == HttpStatusCode.TooManyRequests);
+
+        // Assert
+        (await rejectedResponse.Content.ReadAsStringAsync(cancellationToken)).ShouldBe(configuredMessage);
     }
 
     [Fact]
@@ -527,10 +716,11 @@ public sealed class WebApplicationExtensionsTests
     private static async Task<WebApplication> CreateStartedAppAsync(
         string environment,
         CancellationToken cancellationToken,
+        Action<ConfigurationManager>? configureConfiguration = null,
         Action<IServiceCollection>? configureServices = null,
         Action<WebApplication>? configureRoutes = null)
     {
-        var app = CreateApp(environment, configureServices, configureRoutes);
+        var app = CreateApp(environment, configureConfiguration, configureServices, configureRoutes);
 
         await app.StartAsync(cancellationToken);
 
@@ -539,11 +729,13 @@ public sealed class WebApplicationExtensionsTests
 
     private static WebApplication CreateApp(
         string environment,
+        Action<ConfigurationManager>? configureConfiguration = null,
         Action<IServiceCollection>? configureServices = null,
         Action<WebApplication>? configureRoutes = null)
     {
         var builder = CreateBuilder(environment);
 
+        configureConfiguration?.Invoke(builder.Configuration);
         builder.RegisterWebApi();
         configureServices?.Invoke(builder.Services);
 

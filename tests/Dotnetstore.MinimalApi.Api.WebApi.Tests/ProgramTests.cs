@@ -16,7 +16,7 @@ public sealed class ProgramTests
     private const string TestPath = "/test";
 
     [Fact]
-    public async Task Program_ShouldStartSuccessfully_WhenScopedTestEndpointIsRegistered()
+    public async Task Program_ShouldStartSuccessfully_WhenSingletonTestEndpointIsRegistered()
     {
         // Arrange
         await using var factory = CreateFactory(Environments.Production);
@@ -28,6 +28,7 @@ public sealed class ProgramTests
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBe("Hello World!");
     }
 
     private static ProgramWebApplicationFactory CreateFactory(

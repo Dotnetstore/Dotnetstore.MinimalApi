@@ -54,6 +54,29 @@ public sealed class LogPerformanceFilterTests
         entry.EventId.ShouldBe(default);
     }
 
+    [Fact]
+    public async Task InvokeAsync_ShouldLogExecutionTime_WhenNextThrows()
+    {
+        // Arrange
+        var logger = new TestLogger<LogPerformanceFilter>();
+        var sut = new LogPerformanceFilter(logger);
+        var context = CreateContext();
+        var expectedException = new InvalidOperationException("Boom");
+
+        // Act
+        var exception = await Should.ThrowAsync<InvalidOperationException>(() =>
+            sut.InvokeAsync(context, _ => ValueTask.FromException<object?>(expectedException)).AsTask());
+
+        var entry = logger.Entries.ShouldHaveSingleItem();
+
+        // Assert
+        exception.ShouldBeSameAs(expectedException);
+        entry.LogLevel.ShouldBe(LogLevel.Information);
+        entry.Message.ShouldContain("Endpoint execution time:");
+        entry.Message.ShouldContain(" ms");
+        entry.EventId.ShouldBe(default);
+    }
+
     private static DefaultEndpointFilterInvocationContext CreateContext() =>
         new(new DefaultHttpContext(), []);
 

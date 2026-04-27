@@ -1,12 +1,13 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Dotnetstore.MinimalApi.Api.WebApi.Configuration;
 
 namespace Dotnetstore.MinimalApi.Api.WebApi.Tests.Helpers;
 
 internal static class TestHttp
 {
-    internal const string ApiVersionHeaderName = "api-version";
+    internal static string ApiVersionHeaderName => WebApiConfiguration.ApiVersionHeaderName;
     internal const string HttpLocalhost = "http://localhost";
     internal const string HttpsLocalhost = "https://localhost";
     internal const string OpenApiDocumentPath = "/openapi/v1.json";

@@ -1,88 +1,82 @@
-﻿using System.Net;
-using System.Threading.RateLimiting;
+﻿using System.Threading.RateLimiting;
 using Asp.Versioning;
+using Dotnetstore.MinimalApi.Api.WebApi.Configuration;
 using Dotnetstore.MinimalApi.Api.WebApi.Endpoints;
 using Dotnetstore.MinimalApi.Api.WebApi.Exceptions;
 using Dotnetstore.MinimalApi.Api.WebApi.Handlers;
+using Microsoft.Extensions.Options;
 
 namespace Dotnetstore.MinimalApi.Api.WebApi.Extensions;
 
 internal static class WebApplicationExtensions
 {
-    private const string AllowDotnetstoreSpecificOrigins = "AllowDotnetstoreSpecificOrigins";
-    
     extension(WebApplicationBuilder builder)
     {
         internal WebApplicationBuilder RegisterWebApi()
         {
-            builder
-                .SetupHsts()
-                .SetupCors()
-                .SetupVersioning()
-                .SetupRateLimiter();
+            builder.Services
+                .AddSingleton<IValidateOptions<WebApiOptions>, WebApiOptionsValidator>()
+                .AddOptions<WebApiOptions>()
+                .Bind(builder.Configuration.GetSection(WebApiConfiguration.OptionsSectionName))
+                .PostConfigure(options => options.ApplyDefaults())
+                .ValidateOnStart();
+
+            var webApiOptions = builder.ResolveWebApiOptions();
+
+            builder.SetupHsts(webApiOptions);
+            builder.SetupCors(webApiOptions);
+            builder.SetupVersioning();
+            builder.SetupRateLimiter(webApiOptions);
 
             builder.Services
                 .AddOpenApi()
                 .AddProblemDetails()
-                .AddScoped<IWebApplicationHandlers, WebApplicationHandlers>()
-                .AddScoped<ITestEndpoints, TestEndpoints>()
+                .AddSingleton<IWebApplicationHandlers, WebApplicationHandlers>()
+                .AddSingleton<ITestEndpoints, TestEndpoints>()
                 .AddExceptionHandler<DefaultExceptionHandler>();
         
         
             return builder;
         }
 
-        private WebApplicationBuilder SetupHsts()
+        private void SetupHsts(WebApiOptions webApiOptions)
         {
-            if(builder.Environment.IsDevelopment())
-            {
-                builder.Services
-                    .AddHttpsRedirection(options =>
-                    {
-                        options.RedirectStatusCode = StatusCodes.Status307TemporaryRedirect;
-                        options.HttpsPort = 7201;
-                    });
-            }
+            var httpsRedirectionOptions = builder.Environment.IsDevelopment()
+                ? webApiOptions.HttpsRedirection.Development
+                : webApiOptions.HttpsRedirection.Production;
 
-            if (!builder.Environment.IsDevelopment())
-            {
-                builder.Services
-                    .AddHttpsRedirection(options =>
-                    {
-                        options.RedirectStatusCode = StatusCodes.Status308PermanentRedirect;
-                        options.HttpsPort = 443;
-                    });
-            }
+            builder.Services
+                .AddHttpsRedirection(options =>
+                {
+                    options.RedirectStatusCode = httpsRedirectionOptions.RedirectStatusCode;
+                    options.HttpsPort = httpsRedirectionOptions.HttpsPort;
+                });
         
             builder.Services.AddHsts(options =>
             {
-                options.Preload = true;
-                options.IncludeSubDomains = true;
-                options.MaxAge = TimeSpan.FromDays(30);
+                options.Preload = webApiOptions.Hsts.Preload;
+                options.IncludeSubDomains = webApiOptions.Hsts.IncludeSubDomains;
+                options.MaxAge = TimeSpan.FromDays(webApiOptions.Hsts.MaxAgeDays);
             });
-        
-            return builder;
         }
 
-        private WebApplicationBuilder SetupCors()
+        private void SetupCors(WebApiOptions webApiOptions)
         {
             builder.Services
                 .AddCors(options =>
                 {
-                    options.AddPolicy(name: AllowDotnetstoreSpecificOrigins,
+                    options.AddPolicy(WebApiConfiguration.CorsPolicyName,
                         policy =>
                         {
                             policy
-                                .WithOrigins("http://localhost:7000")
-                                .WithMethods("GET", "POST", "PUT")
+                                .WithOrigins(webApiOptions.Cors.AllowedOrigins!)
+                                .WithMethods(webApiOptions.Cors.AllowedMethods!)
                                 .AllowAnyHeader();
                         });
                 });
-        
-            return builder;
         }
         
-        private WebApplicationBuilder SetupVersioning()
+        private void SetupVersioning()
         {
             builder.Services
                 .AddApiVersioning(options =>
@@ -90,44 +84,52 @@ internal static class WebApplicationExtensions
                     options.DefaultApiVersion = new ApiVersion(1, 0);
                     options.ReportApiVersions = true;
                     options.AssumeDefaultVersionWhenUnspecified = true;
-                    options.ApiVersionReader = new HeaderApiVersionReader("api-version");
+                    options.ApiVersionReader = new HeaderApiVersionReader(WebApiConfiguration.ApiVersionHeaderName);
                 });
-        
-            return builder;
         }
 
-        private WebApplicationBuilder SetupRateLimiter()
+        private void SetupRateLimiter(WebApiOptions webApiOptions)
         {            
+            var rateLimitingOptions = webApiOptions.RateLimiting;
+
             builder.Services
                 .AddRateLimiter(options =>
                 {
-                    options.RejectionStatusCode = (int)HttpStatusCode.TooManyRequests;
+                    options.RejectionStatusCode = rateLimitingOptions.RejectionStatusCode;
                     options.OnRejected = async (context, token) =>
                     {
-                        await context.HttpContext.Response.WriteAsync("Too many requests. Please try again later.", token);
+                        await context.HttpContext.Response.WriteAsync(rateLimitingOptions.RejectionMessage, token);
                     };
-                    options.GlobalLimiter = PartitionedRateLimiter.
-                        Create<HttpContext, string>(httpContext =>
-                            RateLimitPartition.GetFixedWindowLimiter(
-                                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                                factory: _ => new FixedWindowRateLimiterOptions
-                                {
-                                    QueueLimit = 10,
-                                    PermitLimit = 50,
-                                    Window = TimeSpan.FromSeconds(15)
-                                }));
-                    options.AddPolicy("ShortLimit", context =>
+                    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
                         RateLimitPartition.GetFixedWindowLimiter(
-                            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                            factory: partition => new FixedWindowRateLimiterOptions
+                            partitionKey: GetRateLimitPartitionKey(httpContext, rateLimitingOptions.PartitionKeyFallback),
+                            factory: _ => new FixedWindowRateLimiterOptions
                             {
-                                PermitLimit = 10,
-                                Window = TimeSpan.FromSeconds(15)
+                                QueueLimit = rateLimitingOptions.GlobalQueueLimit,
+                                PermitLimit = rateLimitingOptions.GlobalPermitLimit,
+                                Window = TimeSpan.FromSeconds(rateLimitingOptions.GlobalWindowSeconds)
+                            }));
+                    options.AddPolicy(WebApiConfiguration.ShortRateLimitPolicyName, context =>
+                        RateLimitPartition.GetFixedWindowLimiter(
+                            partitionKey: GetRateLimitPartitionKey(context, rateLimitingOptions.PartitionKeyFallback),
+                            factory: _ => new FixedWindowRateLimiterOptions
+                            {
+                                QueueLimit = rateLimitingOptions.ShortQueueLimit,
+                                PermitLimit = rateLimitingOptions.ShortPermitLimit,
+                                Window = TimeSpan.FromSeconds(rateLimitingOptions.ShortWindowSeconds)
                             }));
                 });
-            
-            return builder;
         }
+
+        private WebApiOptions ResolveWebApiOptions() =>
+            (builder.Configuration
+                .GetSection(WebApiConfiguration.OptionsSectionName)
+                .Get<WebApiOptions>()
+            ?? new WebApiOptions())
+            .ApplyDefaults();
+
+        private static string GetRateLimitPartitionKey(HttpContext httpContext, string partitionKeyFallback) =>
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? partitionKeyFallback;
     }
 
     extension(WebApplication app)
@@ -147,7 +149,7 @@ internal static class WebApplicationExtensions
 
             app
                 .UseHttpsRedirection()
-                .UseCors(AllowDotnetstoreSpecificOrigins)
+                .UseCors(WebApiConfiguration.CorsPolicyName)
                 .UseRateLimiter()
                 .UseExceptionHandler();
         
