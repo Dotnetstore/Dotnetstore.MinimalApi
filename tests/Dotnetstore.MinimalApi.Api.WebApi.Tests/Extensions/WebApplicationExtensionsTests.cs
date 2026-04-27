@@ -2,9 +2,11 @@
 using System.Threading.RateLimiting;
 using Asp.Versioning;
 using Dotnetstore.MinimalApi.Api.WebApi.Endpoints;
+using Dotnetstore.MinimalApi.Api.WebApi.Exceptions;
 using Dotnetstore.MinimalApi.Api.WebApi.Handlers;
 using Dotnetstore.MinimalApi.Api.WebApi.Tests.Helpers;
 using Dotnetstore.MinimalApi.Api.WebApi.Extensions;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -118,6 +120,27 @@ public sealed class WebApplicationExtensionsTests
         serviceDescriptor.ImplementationType.ShouldBe(typeof(TestEndpoints));
         serviceDescriptor.Lifetime.ShouldBe(ServiceLifetime.Scoped);
         scope.ServiceProvider.GetRequiredService<ITestEndpoints>().ShouldBeOfType<TestEndpoints>();
+    }
+
+    [Fact]
+    public void RegisterWebApi_RegistersExceptionHandlingDependencies()
+    {
+        // Arrange
+        var builder = CreateBuilder();
+
+        // Act
+        builder.RegisterWebApi();
+
+        var serviceDescriptor = builder.Services.SingleOrDefault(service =>
+            service.ServiceType == typeof(IExceptionHandler)
+            && service.ImplementationType == typeof(DefaultExceptionHandler));
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+
+        // Assert
+        serviceDescriptor.ShouldNotBeNull();
+        serviceDescriptor.Lifetime.ShouldBe(ServiceLifetime.Singleton);
+        serviceProvider.GetRequiredService<IProblemDetailsService>().ShouldNotBeNull();
     }
 
     [Fact]

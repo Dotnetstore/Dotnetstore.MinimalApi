@@ -2,8 +2,8 @@
 using System.Threading.RateLimiting;
 using Asp.Versioning;
 using Dotnetstore.MinimalApi.Api.WebApi.Endpoints;
+using Dotnetstore.MinimalApi.Api.WebApi.Exceptions;
 using Dotnetstore.MinimalApi.Api.WebApi.Handlers;
-using Microsoft.AspNetCore.RateLimiting;
 
 namespace Dotnetstore.MinimalApi.Api.WebApi.Extensions;
 
@@ -23,8 +23,10 @@ internal static class WebApplicationExtensions
 
             builder.Services
                 .AddOpenApi()
+                .AddProblemDetails()
                 .AddScoped<IWebApplicationHandlers, WebApplicationHandlers>()
-                .AddScoped<ITestEndpoints, TestEndpoints>();
+                .AddScoped<ITestEndpoints, TestEndpoints>()
+                .AddExceptionHandler<DefaultExceptionHandler>();
         
         
             return builder;
@@ -146,7 +148,8 @@ internal static class WebApplicationExtensions
             app
                 .UseHttpsRedirection()
                 .UseCors(AllowDotnetstoreSpecificOrigins)
-                .UseRateLimiter();
+                .UseRateLimiter()
+                .UseExceptionHandler();
         
             return app;
         }
