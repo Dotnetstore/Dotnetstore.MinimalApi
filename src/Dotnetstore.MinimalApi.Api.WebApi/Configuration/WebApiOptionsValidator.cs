@@ -16,8 +16,7 @@ internal sealed class WebApiOptionsValidator : IValidateOptions<WebApiOptions>
             errors.Add("WebApi:Hsts:MaxAgeDays must be greater than 0.");
         }
 
-        ValidateHttpsRedirectionOptions(options.HttpsRedirection.Development, "WebApi:HttpsRedirection:Development", errors);
-        ValidateHttpsRedirectionOptions(options.HttpsRedirection.Production, "WebApi:HttpsRedirection:Production", errors);
+        ValidateHttpsRedirectionOptions(options.HttpsRedirection, "WebApi:HttpsRedirection", errors);
 
         if (options.RateLimiting.RejectionStatusCode < StatusCodes.Status400BadRequest
             || options.RateLimiting.RejectionStatusCode > 599)
@@ -40,7 +39,7 @@ internal sealed class WebApiOptionsValidator : IValidateOptions<WebApiOptions>
     }
 
     private static void ValidateHttpsRedirectionOptions(
-        WebApiEnvironmentHttpsRedirectionOptions options,
+        WebApiHttpsRedirectionOptions options,
         string path,
         ICollection<string> errors)
     {

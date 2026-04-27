@@ -20,16 +20,8 @@ internal static class WebApiOptionsTestData
         },
         HttpsRedirection = new WebApiHttpsRedirectionOptions
         {
-            Development = new WebApiEnvironmentHttpsRedirectionOptions
-            {
-                RedirectStatusCode = StatusCodes.Status307TemporaryRedirect,
-                HttpsPort = 7201
-            },
-            Production = new WebApiEnvironmentHttpsRedirectionOptions
-            {
-                RedirectStatusCode = StatusCodes.Status308PermanentRedirect,
-                HttpsPort = 443
-            }
+            RedirectStatusCode = StatusCodes.Status308PermanentRedirect,
+            HttpsPort = 443
         },
         RateLimiting = new WebApiRateLimitingOptions
         {

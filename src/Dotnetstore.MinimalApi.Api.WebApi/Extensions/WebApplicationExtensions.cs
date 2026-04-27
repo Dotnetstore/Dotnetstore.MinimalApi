@@ -41,15 +41,11 @@ internal static class WebApplicationExtensions
 
         private void SetupHsts(WebApiOptions webApiOptions)
         {
-            var httpsRedirectionOptions = builder.Environment.IsDevelopment()
-                ? webApiOptions.HttpsRedirection.Development
-                : webApiOptions.HttpsRedirection.Production;
-
             builder.Services
                 .AddHttpsRedirection(options =>
                 {
-                    options.RedirectStatusCode = httpsRedirectionOptions.RedirectStatusCode;
-                    options.HttpsPort = httpsRedirectionOptions.HttpsPort;
+                    options.RedirectStatusCode = webApiOptions.HttpsRedirection.RedirectStatusCode;
+                    options.HttpsPort = webApiOptions.HttpsRedirection.HttpsPort;
                 });
         
             builder.Services.AddHsts(options =>

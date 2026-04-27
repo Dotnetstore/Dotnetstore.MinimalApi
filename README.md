@@ -84,7 +84,9 @@ docker build -t dotnetstore-minimalapi:local .
 
 ## Web API configuration
 
-Runtime behavior for CORS, HSTS, HTTPS redirection, and rate limiting is configured under the `WebApi` section in `src/Dotnetstore.MinimalApi.Api.WebApi/appsettings.json`.
+Runtime behavior is configured under the `WebApi` section. Shared production defaults live in `src/Dotnetstore.MinimalApi.Api.WebApi/appsettings.json`, while development-specific overrides live in `src/Dotnetstore.MinimalApi.Api.WebApi/appsettings.Development.json`.
+
+`appsettings.json`:
 
 ```json
 {
@@ -99,14 +101,8 @@ Runtime behavior for CORS, HSTS, HTTPS redirection, and rate limiting is configu
 	  "MaxAgeDays": 30
 	},
 	"HttpsRedirection": {
-	  "Development": {
-		"RedirectStatusCode": 307,
-		"HttpsPort": 7201
-	  },
-	  "Production": {
-		"RedirectStatusCode": 308,
-		"HttpsPort": 443
-	  }
+	  "RedirectStatusCode": 308,
+	  "HttpsPort": 443
 	},
 	"RateLimiting": {
 	  "RejectionStatusCode": 429,
@@ -118,6 +114,23 @@ Runtime behavior for CORS, HSTS, HTTPS redirection, and rate limiting is configu
 	  "ShortPermitLimit": 10,
 	  "ShortQueueLimit": 0,
 	  "ShortWindowSeconds": 15
+	}
+  }
+}
+```
+
+`appsettings.Development.json`:
+
+```json
+{
+  "WebApi": {
+	"Cors": {
+	  "AllowedOrigins": ["http://localhost:7000"],
+	  "AllowedMethods": ["GET", "POST", "PUT"]
+	},
+	"HttpsRedirection": {
+	  "RedirectStatusCode": 307,
+	  "HttpsPort": 7201
 	}
   }
 }
@@ -135,7 +148,7 @@ The application validates `WebApi` options during startup and fails fast when co
 - queue limits cannot be negative
 - `RejectionMessage` and `PartitionKeyFallback` cannot be blank
 
-If you override these values with environment-specific settings, keep the same `WebApi` section structure.
+If you override these values per environment, keep the same flat `WebApi` section structure so binding and startup validation continue to work.
 
 ## GitHub Actions
 

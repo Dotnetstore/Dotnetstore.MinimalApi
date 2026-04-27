@@ -80,25 +80,16 @@ public sealed class WebApiOptionsValidatorTests
     }
 
     [Theory]
-    [InlineData(true, 299, "WebApi:HttpsRedirection:Development:RedirectStatusCode must be a valid redirect status code between 300 and 399.")]
-    [InlineData(false, 400, "WebApi:HttpsRedirection:Production:RedirectStatusCode must be a valid redirect status code between 300 and 399.")]
+    [InlineData(299, "WebApi:HttpsRedirection:RedirectStatusCode must be a valid redirect status code between 300 and 399.")]
+    [InlineData(400, "WebApi:HttpsRedirection:RedirectStatusCode must be a valid redirect status code between 300 and 399.")]
     public void Validate_ShouldFail_WhenHttpsRedirectStatusCodeIsInvalid(
-        bool isDevelopment,
         int invalidRedirectStatusCode,
         string expectedError)
     {
         // Arrange
         var sut = new WebApiOptionsValidator();
         var options = WebApiOptionsTestData.CreateValidOptions();
-
-        if (isDevelopment)
-        {
-            options.HttpsRedirection.Development.RedirectStatusCode = invalidRedirectStatusCode;
-        }
-        else
-        {
-            options.HttpsRedirection.Production.RedirectStatusCode = invalidRedirectStatusCode;
-        }
+        options.HttpsRedirection.RedirectStatusCode = invalidRedirectStatusCode;
 
         // Act
         var result = sut.Validate(Options.DefaultName, options);
@@ -108,25 +99,16 @@ public sealed class WebApiOptionsValidatorTests
     }
 
     [Theory]
-    [InlineData(true, 0, "WebApi:HttpsRedirection:Development:HttpsPort must be between 1 and 65535.")]
-    [InlineData(false, 65536, "WebApi:HttpsRedirection:Production:HttpsPort must be between 1 and 65535.")]
+    [InlineData(0, "WebApi:HttpsRedirection:HttpsPort must be between 1 and 65535.")]
+    [InlineData(65536, "WebApi:HttpsRedirection:HttpsPort must be between 1 and 65535.")]
     public void Validate_ShouldFail_WhenHttpsPortIsInvalid(
-        bool isDevelopment,
         int invalidHttpsPort,
         string expectedError)
     {
         // Arrange
         var sut = new WebApiOptionsValidator();
         var options = WebApiOptionsTestData.CreateValidOptions();
-
-        if (isDevelopment)
-        {
-            options.HttpsRedirection.Development.HttpsPort = invalidHttpsPort;
-        }
-        else
-        {
-            options.HttpsRedirection.Production.HttpsPort = invalidHttpsPort;
-        }
+        options.HttpsRedirection.HttpsPort = invalidHttpsPort;
 
         // Act
         var result = sut.Validate(Options.DefaultName, options);

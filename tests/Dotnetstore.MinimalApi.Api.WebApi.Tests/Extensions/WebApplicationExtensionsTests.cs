@@ -156,6 +156,44 @@ public sealed class WebApplicationExtensionsTests
     }
 
     [Fact]
+    public void RegisterWebApi_ShouldBindProductionWebApiOptions_FromAppsettingsJson()
+    {
+        // Arrange
+        var builder = CreateBuilder(Environments.Production);
+
+        // Act
+        builder.RegisterWebApi();
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<WebApiOptions>>().Value;
+
+        // Assert
+        options.Cors.AllowedOrigins.ShouldBe(["http://localhost:7000"]);
+        options.Cors.AllowedMethods.ShouldBe([HttpMethods.Get, HttpMethods.Post, HttpMethods.Put]);
+        options.HttpsRedirection.RedirectStatusCode.ShouldBe(StatusCodes.Status308PermanentRedirect);
+        options.HttpsRedirection.HttpsPort.ShouldBe(443);
+    }
+
+    [Fact]
+    public void RegisterWebApi_ShouldBindDevelopmentWebApiOptions_FromAppsettingsDevelopmentJson()
+    {
+        // Arrange
+        var builder = CreateBuilder(Environments.Development);
+
+        // Act
+        builder.RegisterWebApi();
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<WebApiOptions>>().Value;
+
+        // Assert
+        options.Cors.AllowedOrigins.ShouldBe(["http://localhost:7000"]);
+        options.Cors.AllowedMethods.ShouldBe([HttpMethods.Get, HttpMethods.Post, HttpMethods.Put]);
+        options.HttpsRedirection.RedirectStatusCode.ShouldBe(StatusCodes.Status307TemporaryRedirect);
+        options.HttpsRedirection.HttpsPort.ShouldBe(7201);
+    }
+
+    [Fact]
     public void RegisterWebApi_ShouldConfigureHttpsRedirection_WhenEnvironmentIsDevelopment()
     {
         // Arrange

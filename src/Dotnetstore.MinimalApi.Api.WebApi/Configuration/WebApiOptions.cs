@@ -8,13 +8,13 @@ internal static class WebApiDefaultValues
 
 internal sealed class WebApiOptions
 {
-    public WebApiCorsOptions Cors { get; set; } = new();
+    public WebApiCorsOptions Cors { get; init; } = new();
 
-    public WebApiHstsOptions Hsts { get; set; } = new();
+    public WebApiHstsOptions Hsts { get; init; } = new();
 
-    public WebApiHttpsRedirectionOptions HttpsRedirection { get; set; } = new();
+    public WebApiHttpsRedirectionOptions HttpsRedirection { get; init; } = new();
 
-    public WebApiRateLimitingOptions RateLimiting { get; set; } = new();
+    public WebApiRateLimitingOptions RateLimiting { get; init; } = new();
 
     internal WebApiOptions ApplyDefaults()
     {
@@ -34,33 +34,18 @@ internal sealed class WebApiCorsOptions
 
 internal sealed class WebApiHstsOptions
 {
-    public bool Preload { get; set; } = true;
+    public bool Preload { get; init; } = true;
 
-    public bool IncludeSubDomains { get; set; } = true;
+    public bool IncludeSubDomains { get; init; } = true;
 
     public int MaxAgeDays { get; set; } = 30;
 }
 
 internal sealed class WebApiHttpsRedirectionOptions
 {
-    public WebApiEnvironmentHttpsRedirectionOptions Development { get; set; } = new()
-    {
-        RedirectStatusCode = StatusCodes.Status307TemporaryRedirect,
-        HttpsPort = 7201
-    };
+    public int RedirectStatusCode { get; set; } = StatusCodes.Status308PermanentRedirect;
 
-    public WebApiEnvironmentHttpsRedirectionOptions Production { get; set; } = new()
-    {
-        RedirectStatusCode = StatusCodes.Status308PermanentRedirect,
-        HttpsPort = 443
-    };
-}
-
-internal sealed class WebApiEnvironmentHttpsRedirectionOptions
-{
-    public int RedirectStatusCode { get; set; }
-
-    public int HttpsPort { get; set; }
+    public int HttpsPort { get; set; } = 443;
 }
 
 internal sealed class WebApiRateLimitingOptions
@@ -79,7 +64,7 @@ internal sealed class WebApiRateLimitingOptions
 
     public int ShortPermitLimit { get; set; } = 10;
 
-    public int ShortQueueLimit { get; set; } = 0;
+    public int ShortQueueLimit { get; set; }
 
     public int ShortWindowSeconds { get; set; } = 15;
 }

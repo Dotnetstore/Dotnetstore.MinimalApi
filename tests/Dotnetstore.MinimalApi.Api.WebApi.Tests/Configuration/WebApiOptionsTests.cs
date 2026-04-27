@@ -96,10 +96,8 @@ public sealed class WebApiOptionsTests
         var sut = new WebApiHttpsRedirectionOptions();
 
         // Assert
-        sut.Development.RedirectStatusCode.ShouldBe(StatusCodes.Status307TemporaryRedirect);
-        sut.Development.HttpsPort.ShouldBe(7201);
-        sut.Production.RedirectStatusCode.ShouldBe(StatusCodes.Status308PermanentRedirect);
-        sut.Production.HttpsPort.ShouldBe(443);
+        sut.RedirectStatusCode.ShouldBe(StatusCodes.Status308PermanentRedirect);
+        sut.HttpsPort.ShouldBe(443);
     }
 
     [Fact]
