@@ -13,6 +13,7 @@ namespace Dotnetstore.MinimalApi.Api.WebApi.Tests;
 /// </summary>
 public sealed class ProgramTests
 {
+    private const string HealthPath = "/health";
     private const string TestPath = "/test";
 
     [Fact]
@@ -29,6 +30,20 @@ public sealed class ProgramTests
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBe("Hello World!");
+    }
+
+    [Fact]
+    public async Task Program_ShouldExposeHealthEndpoint_WhenRunningInDevelopmentWithAspireServiceDefaults()
+    {
+        // Arrange
+        await using var factory = CreateFactory(Environments.Development);
+        using var client = TestHttp.CreateClient(factory, TestHttp.HttpsLocalhost);
+
+        // Act
+        var response = await client.GetAsync(HealthPath, TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private static ProgramWebApplicationFactory CreateFactory(

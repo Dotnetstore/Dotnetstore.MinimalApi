@@ -23,6 +23,21 @@ internal static class WebApiOptionsTestData
             RedirectStatusCode = StatusCodes.Status308PermanentRedirect,
             HttpsPort = 443
         },
+        OpenTelemetry = new WebApiOpenTelemetryOptions
+        {
+            ServiceName = "webApi",
+            ServiceVersion = "1.0.0",
+            Tracing = new WebApiOpenTelemetryTracingOptions
+            {
+                Enabled = true,
+                RecordException = true,
+                ExcludedPaths = ["/openapi"]
+            },
+            Metrics = new WebApiOpenTelemetryMetricsOptions
+            {
+                Enabled = true
+            }
+        },
         RateLimiting = new WebApiRateLimitingOptions
         {
             RejectionStatusCode = StatusCodes.Status429TooManyRequests,

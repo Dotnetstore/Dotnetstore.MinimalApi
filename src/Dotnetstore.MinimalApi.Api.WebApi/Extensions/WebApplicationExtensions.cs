@@ -14,6 +14,9 @@ internal static class WebApplicationExtensions
     {
         internal WebApplicationBuilder RegisterWebApi()
         {
+            builder
+                .AddServiceDefaults();
+            
             builder.Services
                 .AddSingleton<IValidateOptions<WebApiOptions>, WebApiOptionsValidator>()
                 .AddOptions<WebApiOptions>()

@@ -80,6 +80,67 @@ public sealed class WebApiOptionsValidatorTests
     }
 
     [Theory]
+    [MemberData(nameof(InvalidOpenTelemetryTextOptions))]
+    public void Validate_ShouldFail_WhenOpenTelemetryTextOptionIsInvalid(
+        string invalidValue,
+        string expectedError,
+        string propertyName)
+    {
+        // Arrange
+        var sut = new WebApiOptionsValidator();
+        var options = WebApiOptionsTestData.CreateValidOptions();
+
+        switch (propertyName)
+        {
+            case nameof(WebApiOpenTelemetryOptions.ServiceName):
+                options.OpenTelemetry.ServiceName = invalidValue;
+                break;
+            case nameof(WebApiOpenTelemetryOptions.ServiceVersion):
+                options.OpenTelemetry.ServiceVersion = invalidValue;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(propertyName), propertyName, "Unknown invalid OpenTelemetry text property.");
+        }
+
+        // Act
+        var result = sut.Validate(Options.DefaultName, options);
+
+        // Assert
+        AssertValidationFailure(result, expectedError);
+    }
+
+    [Fact]
+    public void Validate_ShouldFail_WhenOpenTelemetryTracingExcludedPathsContainEmptyValue()
+    {
+        // Arrange
+        var sut = new WebApiOptionsValidator();
+        var options = WebApiOptionsTestData.CreateValidOptions();
+        options.OpenTelemetry.Tracing.ExcludedPaths = ["/openapi", " "];
+
+        // Act
+        var result = sut.Validate(Options.DefaultName, options);
+
+        // Assert
+        AssertValidationFailure(result, "WebApi:OpenTelemetry:Tracing:ExcludedPaths cannot contain empty values.");
+    }
+
+    [Fact]
+    public void Validate_ShouldAllowTelemetrySignalsToBeDisabled_WhenTracingAndMetricsAreDisabled()
+    {
+        // Arrange
+        var sut = new WebApiOptionsValidator();
+        var options = WebApiOptionsTestData.CreateValidOptions();
+        options.OpenTelemetry.Tracing.Enabled = false;
+        options.OpenTelemetry.Metrics.Enabled = false;
+
+        // Act
+        var result = sut.Validate(Options.DefaultName, options);
+
+        // Assert
+        result.Succeeded.ShouldBeTrue();
+    }
+
+    [Theory]
     [InlineData(299, "WebApi:HttpsRedirection:RedirectStatusCode must be a valid redirect status code between 300 and 399.")]
     [InlineData(400, "WebApi:HttpsRedirection:RedirectStatusCode must be a valid redirect status code between 300 and 399.")]
     public void Validate_ShouldFail_WhenHttpsRedirectStatusCodeIsInvalid(
@@ -171,6 +232,7 @@ public sealed class WebApiOptionsValidatorTests
         var options = WebApiOptionsTestData.CreateValidOptions();
         options.Cors.AllowedOrigins = [];
         options.Hsts.MaxAgeDays = 0;
+        options.OpenTelemetry.ServiceName = string.Empty;
         options.RateLimiting.RejectionMessage = string.Empty;
 
         // Act
@@ -181,6 +243,7 @@ public sealed class WebApiOptionsValidatorTests
         result.Failed.ShouldBeTrue();
         failures.ShouldContain("WebApi:Cors:AllowedOrigins must contain at least one value.");
         failures.ShouldContain("WebApi:Hsts:MaxAgeDays must be greater than 0.");
+        failures.ShouldContain("WebApi:OpenTelemetry:ServiceName cannot be empty.");
         failures.ShouldContain("WebApi:RateLimiting:RejectionMessage cannot be empty.");
     }
 
@@ -196,6 +259,12 @@ public sealed class WebApiOptionsValidatorTests
         { null, "WebApi:Cors:AllowedMethods must contain at least one value." },
         { [], "WebApi:Cors:AllowedMethods must contain at least one value." },
         { [HttpMethods.Get, " "], "WebApi:Cors:AllowedMethods cannot contain empty values." }
+    };
+
+    public static TheoryData<string, string, string> InvalidOpenTelemetryTextOptions() => new()
+    {
+        { " ", "WebApi:OpenTelemetry:ServiceName cannot be empty.", nameof(WebApiOpenTelemetryOptions.ServiceName) },
+        { " ", "WebApi:OpenTelemetry:ServiceVersion cannot be empty when provided.", nameof(WebApiOpenTelemetryOptions.ServiceVersion) }
     };
 
     public static TheoryData<string, string, bool> InvalidRateLimitingTextOptions() => new()

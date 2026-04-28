@@ -245,6 +245,7 @@ public sealed class WebApplicationExtensionsTests
         options.GlobalLimiter.ShouldNotBeNull();
     }
 
+
     [Fact]
     public void RegisterWebApi_ShouldBindCorsAndRateLimitingOptions_FromConfiguration()
     {
@@ -274,6 +275,33 @@ public sealed class WebApplicationExtensionsTests
         allowedMethods.ShouldContain(configuredMethod);
         webApiOptions.RateLimiting.RejectionMessage.ShouldBe(configuredMessage);
         webApiOptions.RateLimiting.PartitionKeyFallback.ShouldBe(configuredPartitionFallback);
+    }
+
+    [Fact]
+    public void RegisterWebApi_ShouldBindOpenTelemetryOptions_FromConfiguration()
+    {
+        // Arrange
+        const string configuredServiceName = "webApi-tests";
+        const string configuredServiceVersion = "2.5.0";
+        var builder = CreateBuilder();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [$"{WebApiConfiguration.OptionsSectionName}:OpenTelemetry:ServiceName"] = configuredServiceName,
+            [$"{WebApiConfiguration.OptionsSectionName}:OpenTelemetry:ServiceVersion"] = configuredServiceVersion,
+            [$"{WebApiConfiguration.OptionsSectionName}:OpenTelemetry:Tracing:ExcludedPaths:0"] = "/health"
+        });
+
+        // Act
+        builder.RegisterWebApi();
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var webApiOptions = serviceProvider.GetRequiredService<IOptions<WebApiOptions>>().Value;
+
+        // Assert
+        webApiOptions.OpenTelemetry.ServiceName.ShouldBe(configuredServiceName);
+        webApiOptions.OpenTelemetry.ServiceVersion.ShouldBe(configuredServiceVersion);
+        webApiOptions.OpenTelemetry.Tracing.ExcludedPaths.ShouldBe(["/health"]);
+        webApiOptions.OpenTelemetry.Metrics.Enabled.ShouldBeTrue();
     }
 
     [Fact]
@@ -346,6 +374,30 @@ public sealed class WebApplicationExtensionsTests
 
         // Assert
         exception.Message.ShouldContain("WebApi:RateLimiting:GlobalPermitLimit");
+    }
+
+    [Fact]
+    public async Task RegisterWebApi_ShouldFailStartup_WhenOpenTelemetryServiceNameIsBlank()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        // Act
+        var exception = await Should.ThrowAsync<OptionsValidationException>(async () =>
+        {
+            await using var app = CreateApp(
+                Environments.Production,
+                configureConfiguration: configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [$"{WebApiConfiguration.OptionsSectionName}:OpenTelemetry:ServiceName"] = " "
+                }),
+                configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
+
+            await app.StartAsync(cancellationToken);
+        });
+
+        // Assert
+        exception.Message.ShouldContain("WebApi:OpenTelemetry:ServiceName");
     }
 
     [Fact]

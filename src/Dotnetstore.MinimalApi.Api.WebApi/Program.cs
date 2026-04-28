@@ -4,10 +4,12 @@ using Dotnetstore.MinimalApi.Api.WebApi.Extensions;
 var builder = WebApplication.CreateBuilder(args);
 
 builder
+    .AddServiceDefaults()
     .RegisterWebApi();
 
 var app = builder.Build();
-app.RegisterMiddlewares();
+app.RegisterMiddlewares()
+    .MapDefaultEndpoints();
 
 var testEndpoints = app.Services.GetRequiredService<ITestEndpoints>();
 testEndpoints.MapEndpoints(app);

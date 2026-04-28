@@ -16,6 +16,8 @@ Minimal API sample built with .NET 10, backed by automated GitHub Actions workfl
 ## Solution structure
 
 - `src/Dotnetstore.MinimalApi.Api.WebApi` - the Minimal API application
+- `src/Dotnetstore.MinimalApi.Shared.AppHost` - the Aspire orchestrator used to run the application locally with the Aspire dashboard
+- `src/Dotnetstore.MinimalApi.Shared.ServiceDefaults` - shared Aspire service defaults for health checks, service discovery, resilience, logs, traces, and metrics
 - `tests/Dotnetstore.MinimalApi.Api.WebApi.Tests` - automated tests for startup, middleware, CORS, and application bootstrapping
 - `Helpers/TestHttp.cs` in the test project - shared HTTP test helpers
 - `.github/workflows` - GitHub Actions CI/CD workflows
@@ -76,6 +78,12 @@ dotnet tool install dotnet-reportgenerator-globaltool --tool-path .\.tools
 dotnet run --project .\src\Dotnetstore.MinimalApi.Api.WebApi\Dotnetstore.MinimalApi.Api.WebApi.csproj
 ```
 
+### Run the application through Aspire
+
+```powershell
+dotnet run --project .\src\Dotnetstore.MinimalApi.Shared.AppHost\Dotnetstore.MinimalApi.Shared.AppHost.csproj
+```
+
 ### Build the container image locally
 
 ```powershell
@@ -103,6 +111,17 @@ Runtime behavior is configured under the `WebApi` section. Shared production def
 	"HttpsRedirection": {
 	  "RedirectStatusCode": 308,
 	  "HttpsPort": 443
+	},
+	"OpenTelemetry": {
+	  "ServiceName": "webApi",
+	  "Tracing": {
+		"Enabled": true,
+		"RecordException": true,
+		"ExcludedPaths": ["/openapi"]
+	  },
+	  "Metrics": {
+		"Enabled": true
+	  }
 	},
 	"RateLimiting": {
 	  "RejectionStatusCode": 429,
@@ -144,11 +163,15 @@ The application validates `WebApi` options during startup and fails fast when co
 - `Hsts.MaxAgeDays` must be greater than `0`
 - HTTPS redirect status codes must be redirect responses (`300`-`399`)
 - HTTPS ports must be between `1` and `65535`
+- `OpenTelemetry.ServiceName` cannot be blank
+- `OpenTelemetry.Tracing.ExcludedPaths` cannot contain blank values
 - rate limiter permit/window values must be positive
 - queue limits cannot be negative
 - `RejectionMessage` and `PartitionKeyFallback` cannot be blank
 
 If you override these values per environment, keep the same flat `WebApi` section structure so binding and startup validation continue to work.
+
+Aspire owns OTLP exporter configuration for local orchestration. When you run through `AppHost`, the dashboard and resource service supply the exporter settings through environment variables, while the `WebApi:OpenTelemetry` section remains responsible for service identity and tracing behavior.
 
 ## GitHub Actions
 

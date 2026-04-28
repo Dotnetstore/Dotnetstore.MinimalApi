@@ -17,6 +17,7 @@ internal sealed class WebApiOptionsValidator : IValidateOptions<WebApiOptions>
         }
 
         ValidateHttpsRedirectionOptions(options.HttpsRedirection, "WebApi:HttpsRedirection", errors);
+        ValidateOpenTelemetryOptions(options.OpenTelemetry, errors);
 
         if (options.RateLimiting.RejectionStatusCode < StatusCodes.Status400BadRequest
             || options.RateLimiting.RejectionStatusCode > 599)
@@ -65,6 +66,22 @@ internal sealed class WebApiOptionsValidator : IValidateOptions<WebApiOptions>
         if (values.Any(string.IsNullOrWhiteSpace))
         {
             errors.Add($"{path} cannot contain empty values.");
+        }
+    }
+
+    private static void ValidateOpenTelemetryOptions(WebApiOpenTelemetryOptions options, ICollection<string> errors)
+    {
+        ValidateRequiredString(options.ServiceName, "WebApi:OpenTelemetry:ServiceName", errors);
+
+        if (options.ServiceVersion is not null && string.IsNullOrWhiteSpace(options.ServiceVersion))
+        {
+            errors.Add("WebApi:OpenTelemetry:ServiceVersion cannot be empty when provided.");
+        }
+
+
+        if (options.Tracing.ExcludedPaths?.Any(string.IsNullOrWhiteSpace) == true)
+        {
+            errors.Add("WebApi:OpenTelemetry:Tracing:ExcludedPaths cannot contain empty values.");
         }
     }
 

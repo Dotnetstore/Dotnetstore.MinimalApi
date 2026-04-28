@@ -19,6 +19,7 @@ public sealed class WebApiOptionsTests
         sut.Cors.ShouldNotBeNull();
         sut.Hsts.ShouldNotBeNull();
         sut.HttpsRedirection.ShouldNotBeNull();
+        sut.OpenTelemetry.ShouldNotBeNull();
         sut.RateLimiting.ShouldNotBeNull();
     }
 
@@ -42,6 +43,7 @@ public sealed class WebApiOptionsTests
         var sut = WebApiOptionsTestData.CreateValidOptions();
         sut.Cors.AllowedOrigins = null;
         sut.Cors.AllowedMethods = null;
+        sut.OpenTelemetry.Tracing.ExcludedPaths = null;
 
         // Act
         sut.ApplyDefaults();
@@ -49,6 +51,7 @@ public sealed class WebApiOptionsTests
         // Assert
         sut.Cors.AllowedOrigins.ShouldBeSameAs(WebApiDefaultValues.CorsAllowedOrigins);
         sut.Cors.AllowedMethods.ShouldBeSameAs(WebApiDefaultValues.CorsAllowedMethods);
+        sut.OpenTelemetry.Tracing.ExcludedPaths.ShouldBeSameAs(WebApiDefaultValues.OpenTelemetryExcludedPaths);
     }
 
     [Fact]
@@ -70,11 +73,27 @@ public sealed class WebApiOptionsTests
     }
 
     [Fact]
+    public void ApplyDefaults_ShouldPreserveTelemetryExcludedPaths_WhenTracingExclusionsAreAlreadyConfigured()
+    {
+        // Arrange
+        var configuredExcludedPaths = new[] { "/health" };
+        var sut = WebApiOptionsTestData.CreateValidOptions();
+        sut.OpenTelemetry.Tracing.ExcludedPaths = configuredExcludedPaths;
+
+        // Act
+        sut.ApplyDefaults();
+
+        // Assert
+        sut.OpenTelemetry.Tracing.ExcludedPaths.ShouldBeSameAs(configuredExcludedPaths);
+    }
+
+    [Fact]
     public void WebApiDefaultValues_ShouldExposeExpectedCorsDefaults_WhenAccessed()
     {
         // Assert
         WebApiDefaultValues.CorsAllowedOrigins.ShouldHaveSingleItem().ShouldBe("http://localhost:7000");
         WebApiDefaultValues.CorsAllowedMethods.ShouldBe([HttpMethods.Get, HttpMethods.Post, HttpMethods.Put]);
+        WebApiDefaultValues.OpenTelemetryExcludedPaths.ShouldBe(["/openapi"]);
     }
 
     [Fact]
@@ -116,6 +135,21 @@ public sealed class WebApiOptionsTests
         sut.ShortPermitLimit.ShouldBe(10);
         sut.ShortQueueLimit.ShouldBe(0);
         sut.ShortWindowSeconds.ShouldBe(15);
+    }
+
+    [Fact]
+    public void WebApiOpenTelemetryOptions_ShouldUseExpectedDefaults_WhenConstructed()
+    {
+        // Arrange
+        var sut = new WebApiOpenTelemetryOptions();
+
+        // Assert
+        sut.ServiceName.ShouldBe("webApi");
+        sut.ServiceVersion.ShouldBeNull();
+        sut.Tracing.Enabled.ShouldBeTrue();
+        sut.Tracing.RecordException.ShouldBeTrue();
+        sut.Tracing.ExcludedPaths.ShouldBeNull();
+        sut.Metrics.Enabled.ShouldBeTrue();
     }
 }
 

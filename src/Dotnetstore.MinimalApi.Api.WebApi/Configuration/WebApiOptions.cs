@@ -4,6 +4,7 @@ internal static class WebApiDefaultValues
 {
     internal static readonly string[] CorsAllowedOrigins = ["http://localhost:7000"];
     internal static readonly string[] CorsAllowedMethods = [HttpMethods.Get, HttpMethods.Post, HttpMethods.Put];
+    internal static readonly string[] OpenTelemetryExcludedPaths = ["/openapi"];
 }
 
 internal sealed class WebApiOptions
@@ -14,12 +15,15 @@ internal sealed class WebApiOptions
 
     public WebApiHttpsRedirectionOptions HttpsRedirection { get; init; } = new();
 
+    public WebApiOpenTelemetryOptions OpenTelemetry { get; init; } = new();
+
     public WebApiRateLimitingOptions RateLimiting { get; init; } = new();
 
     internal WebApiOptions ApplyDefaults()
     {
         Cors.AllowedOrigins ??= WebApiDefaultValues.CorsAllowedOrigins;
         Cors.AllowedMethods ??= WebApiDefaultValues.CorsAllowedMethods;
+        OpenTelemetry.Tracing.ExcludedPaths ??= WebApiDefaultValues.OpenTelemetryExcludedPaths;
 
         return this;
     }
@@ -46,6 +50,32 @@ internal sealed class WebApiHttpsRedirectionOptions
     public int RedirectStatusCode { get; set; } = StatusCodes.Status308PermanentRedirect;
 
     public int HttpsPort { get; set; } = 443;
+}
+
+internal sealed class WebApiOpenTelemetryOptions
+{
+    public string ServiceName { get; set; } = "webApi";
+
+    public string? ServiceVersion { get; set; }
+
+    public WebApiOpenTelemetryTracingOptions Tracing { get; init; } = new();
+
+    public WebApiOpenTelemetryMetricsOptions Metrics { get; init; } = new();
+}
+
+
+internal sealed class WebApiOpenTelemetryTracingOptions
+{
+    public bool Enabled { get; set; } = true;
+
+    public bool RecordException { get; set; } = true;
+
+    public string[]? ExcludedPaths { get; set; }
+}
+
+internal sealed class WebApiOpenTelemetryMetricsOptions
+{
+    public bool Enabled { get; set; } = true;
 }
 
 internal sealed class WebApiRateLimitingOptions
