@@ -8,7 +8,7 @@ namespace Dotnetstore.MinimalApi.Api.WebApi.OpenApi;
 internal sealed class TestDocumentTransformer(
     IOptions<ApiKeySecurityOptions> options) : IOpenApiDocumentTransformer
 {
-    public async Task TransformAsync(
+    public Task TransformAsync(
         OpenApiDocument document, 
         OpenApiDocumentTransformerContext context,
         CancellationToken cancellationToken)
@@ -39,6 +39,6 @@ internal sealed class TestDocumentTransformer(
             }
         }
         
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 }

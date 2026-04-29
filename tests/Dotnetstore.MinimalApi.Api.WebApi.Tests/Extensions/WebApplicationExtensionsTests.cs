@@ -1,4 +1,6 @@
-﻿using System.Net;
+﻿using System.ComponentModel.DataAnnotations;
+using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using Asp.Versioning;
@@ -13,6 +15,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
@@ -457,6 +460,56 @@ public sealed class WebApplicationExtensionsTests
 
         // Assert
         exception.Message.ShouldContain("WebApi:OpenTelemetry:ServiceName");
+    }
+
+    [Fact]
+    public async Task RegisterWebApi_ShouldFailStartup_WhenApiKeyHeaderNameIsBlank()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        // Act
+        var exception = await Should.ThrowAsync<OptionsValidationException>(async () =>
+        {
+            await using var app = CreateApp(
+                Environments.Production,
+                configureConfiguration: configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [$"{ApiKeySecurityOptions.SectionName}:HeaderName"] = " ",
+                    [$"{ApiKeySecurityOptions.SectionName}:Value"] = "some-value"
+                }),
+                configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
+
+            await app.StartAsync(cancellationToken);
+        });
+
+        // Assert
+        exception.Message.ShouldContain("ApiKey:HeaderName");
+    }
+
+    [Fact]
+    public async Task RegisterWebApi_ShouldFailStartup_WhenApiKeyValueIsBlank()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        // Act
+        var exception = await Should.ThrowAsync<OptionsValidationException>(async () =>
+        {
+            await using var app = CreateApp(
+                Environments.Production,
+                configureConfiguration: configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [$"{ApiKeySecurityOptions.SectionName}:HeaderName"] = "X-API-KEY",
+                    [$"{ApiKeySecurityOptions.SectionName}:Value"] = " "
+                }),
+                configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
+
+            await app.StartAsync(cancellationToken);
+        });
+
+        // Assert
+        exception.Message.ShouldContain("ApiKey:Value");
     }
 
     [Fact]
@@ -934,6 +987,130 @@ public sealed class WebApplicationExtensionsTests
         secondResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
         thirdResponse.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
         (await thirdResponse.Content.ReadAsStringAsync(cancellationToken)).ShouldBe(TooManyRequestsMessage);
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldReturnBadRequestProblemDetails_WhenValidationExceptionIsThrown()
+    {
+        // Arrange
+        const string errorMessage = "Name is required.";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Production,
+            cancellationToken,
+            configureRoutes: webApplication => webApplication.MapGet("/throw-validation",
+                IResult () => throw new ValidationException(errorMessage)));
+        using var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+
+        // Act
+        var response = await client.GetAsync("/throw-validation", cancellationToken);
+        var problemDetails = await response.Content.ReadFromJsonAsync<ProblemDetails>(cancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        problemDetails.ShouldNotBeNull();
+        problemDetails.Type.ShouldBe("bad-request");
+        problemDetails.Title.ShouldBe("The request is invalid.");
+        problemDetails.Detail.ShouldBe(errorMessage);
+        problemDetails.Status.ShouldBe(StatusCodes.Status400BadRequest);
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldReturnNotFoundProblemDetails_WhenKeyNotFoundExceptionIsThrown()
+    {
+        // Arrange
+        const string errorMessage = "Resource not found.";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Production,
+            cancellationToken,
+            configureRoutes: webApplication => webApplication.MapGet("/throw-not-found",
+                IResult () => throw new KeyNotFoundException(errorMessage)));
+        using var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+
+        // Act
+        var response = await client.GetAsync("/throw-not-found", cancellationToken);
+        var problemDetails = await response.Content.ReadFromJsonAsync<ProblemDetails>(cancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        problemDetails.ShouldNotBeNull();
+        problemDetails.Type.ShouldBe("not-found");
+        problemDetails.Title.ShouldBe("The requested resource was not found.");
+        problemDetails.Detail.ShouldBe(errorMessage);
+        problemDetails.Status.ShouldBe(StatusCodes.Status404NotFound);
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldReturnUnauthorizedProblemDetails_WhenUnauthorizedAccessExceptionIsThrown()
+    {
+        // Arrange
+        const string errorMessage = "Access denied.";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Production,
+            cancellationToken,
+            configureRoutes: webApplication => webApplication.MapGet("/throw-unauthorized",
+                IResult () => throw new UnauthorizedAccessException(errorMessage)));
+        using var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+
+        // Act
+        var response = await client.GetAsync("/throw-unauthorized", cancellationToken);
+        var problemDetails = await response.Content.ReadFromJsonAsync<ProblemDetails>(cancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        problemDetails.ShouldNotBeNull();
+        problemDetails.Type.ShouldBe("unauthorized");
+        problemDetails.Title.ShouldBe("Authentication is required.");
+        problemDetails.Detail.ShouldBe(errorMessage);
+        problemDetails.Status.ShouldBe(StatusCodes.Status401Unauthorized);
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldReturnInternalServerErrorProblemDetails_WhenUnexpectedExceptionIsThrown()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Production,
+            cancellationToken,
+            configureRoutes: webApplication => webApplication.MapGet("/throw-unexpected",
+                IResult () => throw new InvalidOperationException("Sensitive internal details.")));
+        using var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+
+        // Act
+        var response = await client.GetAsync("/throw-unexpected", cancellationToken);
+        var problemDetails = await response.Content.ReadFromJsonAsync<ProblemDetails>(cancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+        problemDetails.ShouldNotBeNull();
+        problemDetails.Type.ShouldBe("internal-server-error");
+        problemDetails.Title.ShouldBe("An unexpected error occurred while processing your request.");
+        problemDetails.Detail.ShouldBe("An unexpected error occurred.");
+        problemDetails.Status.ShouldBe(StatusCodes.Status500InternalServerError);
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldIncludeInstanceInProblemDetails_WhenExceptionIsThrown()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Production,
+            cancellationToken,
+            configureRoutes: webApplication => webApplication.MapGet("/throw-instance",
+                IResult () => throw new KeyNotFoundException("Not found.")));
+        using var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+
+        // Act
+        var response = await client.GetAsync("/throw-instance", cancellationToken);
+        var problemDetails = await response.Content.ReadFromJsonAsync<ProblemDetails>(cancellationToken);
+
+        // Assert
+        problemDetails.ShouldNotBeNull();
+        problemDetails.Instance.ShouldBe("GET /throw-instance");
     }
 
     [Fact]

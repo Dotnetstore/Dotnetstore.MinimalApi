@@ -82,6 +82,20 @@ public sealed class ProgramTests
             .ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task Program_ShouldNotExposeHealthEndpoint_WhenRunningInProduction()
+    {
+        // Arrange
+        await using var factory = CreateFactory(Environments.Production);
+        using var client = TestHttp.CreateClient(factory, TestHttp.HttpsLocalhost);
+
+        // Act
+        var response = await client.GetAsync(HealthPath, TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
     private static ProgramWebApplicationFactory CreateFactory(
         string environment,
         Action<IServiceCollection>? configureServices = null) =>

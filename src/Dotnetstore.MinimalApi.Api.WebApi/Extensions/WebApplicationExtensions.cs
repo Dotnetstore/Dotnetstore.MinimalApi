@@ -29,9 +29,13 @@ internal static class WebApplicationExtensions
 
             var webApiOptions = builder.ResolveWebApiOptions();
             
-            builder.Services.Configure<ApiKeySecurityOptions>(builder.Configuration.GetSection(ApiKeySecurityOptions.SectionName));
+            builder.Services
+                .AddSingleton<IValidateOptions<ApiKeySecurityOptions>, ApiKeySecurityOptionsValidator>()
+                .AddOptions<ApiKeySecurityOptions>()
+                .Bind(builder.Configuration.GetSection(ApiKeySecurityOptions.SectionName))
+                .ValidateOnStart();
 
-            builder.SetupHsts(webApiOptions);
+            builder.SetupHttpSecurity(webApiOptions);
             builder.SetupCors(webApiOptions);
             builder.SetupVersioning();
             builder.SetupRateLimiter(webApiOptions);
@@ -50,7 +54,7 @@ internal static class WebApplicationExtensions
             return builder;
         }
 
-        private void SetupHsts(WebApiOptions webApiOptions)
+        private void SetupHttpSecurity(WebApiOptions webApiOptions)
         {
             if (webApiOptions.HttpsRedirection.Enabled)
             {
@@ -111,6 +115,7 @@ internal static class WebApplicationExtensions
                     options.RejectionStatusCode = rateLimitingOptions.RejectionStatusCode;
                     options.OnRejected = async (context, token) =>
                     {
+                        if (context.HttpContext.Response.HasStarted) return;
                         await context.HttpContext.Response.WriteAsync(rateLimitingOptions.RejectionMessage, token);
                     };
                     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
@@ -181,6 +186,7 @@ internal static class WebApplicationExtensions
             }
 
             app
+                .MapDefaultEndpoints()
                 .UseCors(WebApiConfiguration.CorsPolicyName)
                 .UseRateLimiter()
                 .UseExceptionHandler();

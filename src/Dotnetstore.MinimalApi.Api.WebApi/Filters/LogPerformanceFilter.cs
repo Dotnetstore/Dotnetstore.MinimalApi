@@ -18,7 +18,7 @@ internal sealed class LogPerformanceFilter(
         finally
         {
             stopwatch.Stop();
-            logger.LogInformation("Endpoint execution time: {ExecutionTime} ms", stopwatch.ElapsedMilliseconds);
+            logger.LogInformation("Endpoint execution time: {ExecutionTime} ms", stopwatch.Elapsed.TotalMilliseconds);
         }
     }
 }
