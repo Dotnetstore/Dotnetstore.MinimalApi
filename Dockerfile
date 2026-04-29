@@ -3,6 +3,7 @@ WORKDIR /src
 
 COPY ["Directory.Build.props", "./"]
 COPY ["src/Dotnetstore.MinimalApi.Api.WebApi/Dotnetstore.MinimalApi.Api.WebApi.csproj", "src/Dotnetstore.MinimalApi.Api.WebApi/"]
+COPY ["src/Dotnetstore.MinimalApi.Shared.ServiceDefaults/Dotnetstore.MinimalApi.Shared.ServiceDefaults.csproj", "src/Dotnetstore.MinimalApi.Shared.ServiceDefaults/"]
 RUN dotnet restore "src/Dotnetstore.MinimalApi.Api.WebApi/Dotnetstore.MinimalApi.Api.WebApi.csproj"
 
 COPY . .

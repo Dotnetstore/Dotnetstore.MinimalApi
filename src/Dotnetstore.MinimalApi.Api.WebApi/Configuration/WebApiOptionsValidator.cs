@@ -11,12 +11,15 @@ internal sealed class WebApiOptionsValidator : IValidateOptions<WebApiOptions>
         ValidateStringArray(options.Cors.AllowedOrigins, "WebApi:Cors:AllowedOrigins", errors);
         ValidateStringArray(options.Cors.AllowedMethods, "WebApi:Cors:AllowedMethods", errors);
 
-        if (options.Hsts.MaxAgeDays <= 0)
+        if (options.Hsts.Enabled && options.Hsts.MaxAgeDays <= 0)
         {
             errors.Add("WebApi:Hsts:MaxAgeDays must be greater than 0.");
         }
 
-        ValidateHttpsRedirectionOptions(options.HttpsRedirection, "WebApi:HttpsRedirection", errors);
+        if (options.HttpsRedirection.Enabled)
+        {
+            ValidateHttpsRedirectionOptions(options.HttpsRedirection, "WebApi:HttpsRedirection", errors);
+        }
         ValidateOpenTelemetryOptions(options.OpenTelemetry, errors);
 
         if (options.RateLimiting.RejectionStatusCode < StatusCodes.Status400BadRequest

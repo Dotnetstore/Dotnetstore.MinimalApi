@@ -38,6 +38,8 @@ internal sealed class WebApiCorsOptions
 
 internal sealed class WebApiHstsOptions
 {
+    public bool Enabled { get; set; } = true;
+
     public bool Preload { get; init; } = true;
 
     public bool IncludeSubDomains { get; init; } = true;
@@ -47,6 +49,8 @@ internal sealed class WebApiHstsOptions
 
 internal sealed class WebApiHttpsRedirectionOptions
 {
+    public bool Enabled { get; set; } = true;
+
     public int RedirectStatusCode { get; set; } = StatusCodes.Status308PermanentRedirect;
 
     public int HttpsPort { get; set; } = 443;

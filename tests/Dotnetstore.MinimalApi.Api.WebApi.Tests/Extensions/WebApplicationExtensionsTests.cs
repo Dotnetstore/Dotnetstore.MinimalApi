@@ -29,6 +29,7 @@ public sealed class WebApplicationExtensionsTests
 {
     private const string DisallowedOrigin = "http://localhost:7001";
     private const string DevelopmentHttpsLocalhost = "https://localhost:7201";
+    private const string DockerEnvironment = "Docker";
     private const string HttpsExampleCom = "https://example.com";
     private const string LimitedPath = "/limited";
     private const string OrdersPath = "/orders";
@@ -230,6 +231,23 @@ public sealed class WebApplicationExtensionsTests
         options.Cors.AllowedMethods.ShouldBe([HttpMethods.Get, HttpMethods.Post, HttpMethods.Put]);
         options.HttpsRedirection.RedirectStatusCode.ShouldBe(StatusCodes.Status307TemporaryRedirect);
         options.HttpsRedirection.HttpsPort.ShouldBe(7201);
+    }
+
+    [Fact]
+    public void RegisterWebApi_ShouldBindDockerWebApiOptions_FromAppsettingsDockerJson()
+    {
+        // Arrange
+        var builder = CreateBuilder(DockerEnvironment);
+
+        // Act
+        builder.RegisterWebApi();
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<WebApiOptions>>().Value;
+
+        // Assert
+        options.Hsts.Enabled.ShouldBeFalse();
+        options.HttpsRedirection.Enabled.ShouldBeFalse();
     }
 
     [Fact]
@@ -566,6 +584,25 @@ public sealed class WebApplicationExtensionsTests
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.TemporaryRedirect);
         response.Headers.Location?.ToString().ShouldBe($"{DevelopmentHttpsLocalhost}{PingPath}");
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldNotUseHttpsRedirection_WhenEnvironmentIsDocker()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            DockerEnvironment,
+            cancellationToken,
+            configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
+        var client = TestHttp.CreateClient(app, TestHttp.HttpLocalhost);
+
+        // Act
+        var response = await client.GetAsync(PingPath, cancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync(cancellationToken)).ShouldBe("\"pong\"");
     }
 
     [Fact]

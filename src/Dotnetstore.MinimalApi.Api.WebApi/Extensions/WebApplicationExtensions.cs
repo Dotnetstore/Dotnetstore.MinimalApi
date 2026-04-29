@@ -47,19 +47,25 @@ internal static class WebApplicationExtensions
 
         private void SetupHsts(WebApiOptions webApiOptions)
         {
-            builder.Services
-                .AddHttpsRedirection(options =>
-                {
-                    options.RedirectStatusCode = webApiOptions.HttpsRedirection.RedirectStatusCode;
-                    options.HttpsPort = webApiOptions.HttpsRedirection.HttpsPort;
-                });
-        
-            builder.Services.AddHsts(options =>
+            if (webApiOptions.HttpsRedirection.Enabled)
             {
-                options.Preload = webApiOptions.Hsts.Preload;
-                options.IncludeSubDomains = webApiOptions.Hsts.IncludeSubDomains;
-                options.MaxAge = TimeSpan.FromDays(webApiOptions.Hsts.MaxAgeDays);
-            });
+                builder.Services
+                    .AddHttpsRedirection(options =>
+                    {
+                        options.RedirectStatusCode = webApiOptions.HttpsRedirection.RedirectStatusCode;
+                        options.HttpsPort = webApiOptions.HttpsRedirection.HttpsPort;
+                    });
+            }
+        
+            if (webApiOptions.Hsts.Enabled)
+            {
+                builder.Services.AddHsts(options =>
+                {
+                    options.Preload = webApiOptions.Hsts.Preload;
+                    options.IncludeSubDomains = webApiOptions.Hsts.IncludeSubDomains;
+                    options.MaxAge = TimeSpan.FromDays(webApiOptions.Hsts.MaxAgeDays);
+                });
+            }
         }
 
         private void SetupCors(WebApiOptions webApiOptions)
@@ -138,19 +144,25 @@ internal static class WebApplicationExtensions
     {
         internal WebApplication RegisterMiddlewares()
         {
+            var webApiOptions = app.Services.GetRequiredService<IOptions<WebApiOptions>>().Value;
+
             if (app.Environment.IsDevelopment())
             {
                 app
                     .MapOpenApi();
             }
 
-            if (!app.Environment.IsDevelopment())
+            if (!app.Environment.IsDevelopment() && webApiOptions.Hsts.Enabled)
             {
                 app.UseHsts();
             }
 
+            if (webApiOptions.HttpsRedirection.Enabled)
+            {
+                app.UseHttpsRedirection();
+            }
+
             app
-                .UseHttpsRedirection()
                 .UseCors(WebApiConfiguration.CorsPolicyName)
                 .UseRateLimiter()
                 .UseExceptionHandler();

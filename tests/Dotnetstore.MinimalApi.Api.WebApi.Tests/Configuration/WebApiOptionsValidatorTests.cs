@@ -79,6 +79,22 @@ public sealed class WebApiOptionsValidatorTests
         AssertValidationFailure(result, expectedError);
     }
 
+    [Fact]
+    public void Validate_ShouldAllowInvalidHstsMaxAge_WhenHstsIsDisabled()
+    {
+        // Arrange
+        var sut = new WebApiOptionsValidator();
+        var options = WebApiOptionsTestData.CreateValidOptions();
+        options.Hsts.Enabled = false;
+        options.Hsts.MaxAgeDays = 0;
+
+        // Act
+        var result = sut.Validate(Options.DefaultName, options);
+
+        // Assert
+        result.Succeeded.ShouldBeTrue();
+    }
+
     [Theory]
     [MemberData(nameof(InvalidOpenTelemetryTextOptions))]
     public void Validate_ShouldFail_WhenOpenTelemetryTextOptionIsInvalid(
@@ -176,6 +192,23 @@ public sealed class WebApiOptionsValidatorTests
 
         // Assert
         AssertValidationFailure(result, expectedError);
+    }
+
+    [Fact]
+    public void Validate_ShouldAllowInvalidHttpsRedirectionValues_WhenHttpsRedirectionIsDisabled()
+    {
+        // Arrange
+        var sut = new WebApiOptionsValidator();
+        var options = WebApiOptionsTestData.CreateValidOptions();
+        options.HttpsRedirection.Enabled = false;
+        options.HttpsRedirection.RedirectStatusCode = 200;
+        options.HttpsRedirection.HttpsPort = 0;
+
+        // Act
+        var result = sut.Validate(Options.DefaultName, options);
+
+        // Assert
+        result.Succeeded.ShouldBeTrue();
     }
 
     [Theory]

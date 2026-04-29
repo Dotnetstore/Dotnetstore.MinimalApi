@@ -14,12 +14,14 @@ internal static class WebApiOptionsTestData
         },
         Hsts = new WebApiHstsOptions
         {
+            Enabled = true,
             Preload = true,
             IncludeSubDomains = true,
             MaxAgeDays = 30
         },
         HttpsRedirection = new WebApiHttpsRedirectionOptions
         {
+            Enabled = true,
             RedirectStatusCode = StatusCodes.Status308PermanentRedirect,
             HttpsPort = 443
         },

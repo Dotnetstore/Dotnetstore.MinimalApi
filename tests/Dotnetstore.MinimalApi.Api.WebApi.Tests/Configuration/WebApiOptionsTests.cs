@@ -103,6 +103,7 @@ public sealed class WebApiOptionsTests
         var sut = new WebApiHstsOptions();
 
         // Assert
+        sut.Enabled.ShouldBeTrue();
         sut.Preload.ShouldBeTrue();
         sut.IncludeSubDomains.ShouldBeTrue();
         sut.MaxAgeDays.ShouldBe(30);
@@ -115,6 +116,7 @@ public sealed class WebApiOptionsTests
         var sut = new WebApiHttpsRedirectionOptions();
 
         // Assert
+        sut.Enabled.ShouldBeTrue();
         sut.RedirectStatusCode.ShouldBe(StatusCodes.Status308PermanentRedirect);
         sut.HttpsPort.ShouldBe(443);
     }
