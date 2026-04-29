@@ -1,6 +1,6 @@
 ﻿namespace Dotnetstore.MinimalApi.Api.WebApi.Configuration;
 
-internal sealed class ApiKeyOptions
+internal sealed class ApiKeySecurityOptions
 {
     internal const string SectionName = "ApiKey";
 

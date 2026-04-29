@@ -5,7 +5,9 @@ using Dotnetstore.MinimalApi.Api.WebApi.Endpoints;
 using Dotnetstore.MinimalApi.Api.WebApi.Exceptions;
 using Dotnetstore.MinimalApi.Api.WebApi.Filters;
 using Dotnetstore.MinimalApi.Api.WebApi.Handlers;
+using Dotnetstore.MinimalApi.Api.WebApi.OpenApi;
 using Microsoft.Extensions.Options;
+using Scalar.AspNetCore;
 
 namespace Dotnetstore.MinimalApi.Api.WebApi.Extensions;
 
@@ -27,7 +29,7 @@ internal static class WebApplicationExtensions
 
             var webApiOptions = builder.ResolveWebApiOptions();
             
-            builder.Services.Configure<ApiKeyOptions>(builder.Configuration.GetSection(ApiKeyOptions.SectionName));
+            builder.Services.Configure<ApiKeySecurityOptions>(builder.Configuration.GetSection(ApiKeySecurityOptions.SectionName));
 
             builder.SetupHsts(webApiOptions);
             builder.SetupCors(webApiOptions);
@@ -35,7 +37,10 @@ internal static class WebApplicationExtensions
             builder.SetupRateLimiter(webApiOptions);
 
             builder.Services
-                .AddOpenApi()
+                .AddOpenApi(options =>
+                {
+                    options.AddDocumentTransformer<TestDocumentTransformer>();
+                })
                 .AddProblemDetails()
                 .AddSingleton<IWebApplicationHandlers, WebApplicationHandlers>()
                 .AddSingleton<ITestEndpoints, TestEndpoints>()
@@ -150,6 +155,19 @@ internal static class WebApplicationExtensions
             {
                 app
                     .MapOpenApi();
+                
+                var apiKeyOptions = app.Services.GetRequiredService<IOptions<ApiKeySecurityOptions>>().Value;
+
+                app.MapScalarApiReference("/docs", options =>
+                {
+                    options.WithTitle("Dotnetstore MinimalApi Web API");
+                    options.AddPreferredSecuritySchemes("ApiKey");
+                    options.AddApiKeyAuthentication("ApiKey", apiKey =>
+                    {
+                        apiKey.Value = apiKeyOptions.Value;
+                        apiKey.Name = apiKeyOptions.HeaderName;
+                    });
+                });
             }
 
             if (!app.Environment.IsDevelopment() && webApiOptions.Hsts.Enabled)

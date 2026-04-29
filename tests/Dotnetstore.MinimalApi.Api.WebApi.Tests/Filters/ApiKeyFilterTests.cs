@@ -106,7 +106,7 @@ public sealed class ApiKeyFilterTests
     private static ApiKeyFilter CreateSut(
         string headerName = TestHttp.ApiKeyHeaderName,
         string apiKeyValue = TestHttp.ApiKeyValue) =>
-        new(Options.Create(new ApiKeyOptions
+        new(Options.Create(new ApiKeySecurityOptions
         {
             HeaderName = headerName,
             Value = apiKeyValue

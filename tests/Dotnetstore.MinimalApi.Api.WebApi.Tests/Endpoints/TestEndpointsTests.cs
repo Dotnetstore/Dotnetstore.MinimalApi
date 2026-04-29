@@ -127,7 +127,7 @@ public sealed class TestEndpointsTests
         TestApplication.CreateVersionedApp(services =>
         {
             services.AddScoped<ApiKeyFilter>();
-            services.AddSingleton(Options.Create(new ApiKeyOptions
+            services.AddSingleton(Options.Create(new ApiKeySecurityOptions
             {
                 HeaderName = TestHttp.ApiKeyHeaderName,
                 Value = TestHttp.ApiKeyValue

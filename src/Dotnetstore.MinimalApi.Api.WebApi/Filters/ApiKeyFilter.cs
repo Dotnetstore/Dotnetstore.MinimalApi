@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 namespace Dotnetstore.MinimalApi.Api.WebApi.Filters;
 
 internal sealed class ApiKeyFilter(
-    IOptions<ApiKeyOptions> options) : IEndpointFilter
+    IOptions<ApiKeySecurityOptions> options) : IEndpointFilter
 {
     public ValueTask<object?> InvokeAsync(
         EndpointFilterInvocationContext context, 

@@ -11,7 +11,7 @@
 [![Container Registry](https://img.shields.io/badge/GHCR-ready-2496ED?logo=docker&logoColor=white)](https://github.com/users/Dotnetstore/packages/container/package/dotnetstore-minimalapi)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Reusable .NET 10 Minimal API template for teams that want a production-minded starting point instead of a blank project. It comes with API versioning, API-key protection, CORS, rate limiting, OpenTelemetry-ready defaults, Aspire orchestration, Docker packaging, automated tests, and GitHub workflows for CI/CD, releases, coverage, and container publishing.
+Reusable .NET 10 Minimal API template for teams that want a production-minded starting point instead of a blank project. It comes with API versioning, API-key protection, CORS, rate limiting, OpenTelemetry-ready defaults, OpenAPI + Scalar API docs for development, Aspire orchestration, Docker packaging, automated tests, and GitHub workflows for CI/CD, releases, coverage, and container publishing.
 
 ## Why use this template?
 
@@ -24,6 +24,7 @@ Included out of the box:
 - API key endpoint protection
 - CORS and rate limiting configuration
 - OpenTelemetry tracing and metrics hooks
+- OpenAPI JSON plus Scalar UI for local API exploration
 - Aspire `AppHost` for local orchestration
 - Dockerfile and `docker-compose.yml` for containerized runs
 - automated tests and coverage reporting
@@ -96,6 +97,13 @@ Smoke test the sample endpoint:
 curl.exe -i http://localhost:5126/test -H "api-version: 1.0" -H "X-API-KEY: 5CC5F891B1A44E45BCFAB72B598515CA"
 curl.exe -k -i https://localhost:7201/test -H "api-version: 1.0" -H "X-API-KEY: 5CC5F891B1A44E45BCFAB72B598515CA"
 ```
+
+Development-only API docs:
+
+- Scalar UI: `https://localhost:7201/docs/`
+- OpenAPI JSON: `https://localhost:7201/openapi/v1.json`
+
+The project maps both endpoints only when running in `Development`. The generated OpenAPI document includes the configured `ApiKey` security scheme, and Scalar is preconfigured to send the current API key header name for trying secured endpoints locally.
 
 Replace the sample `/test` endpoint:
 
@@ -262,6 +270,8 @@ dotnet run --project .\src\Dotnetstore.MinimalApi.Shared.AppHost\Dotnetstore.Min
 ```
 
 This starts the `webApi` resource through the Aspire `AppHost`, and local telemetry/exporter settings are supplied by Aspire.
+
+When running in `Development`, you can also open the API reference UI at `/docs/` on the Web API service and inspect the generated OpenAPI document at `/openapi/v1.json`.
 
 ### Run with Docker Compose
 

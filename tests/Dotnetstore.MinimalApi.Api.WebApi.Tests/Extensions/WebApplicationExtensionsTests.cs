@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using System.Text.Json;
 using System.Threading.RateLimiting;
 using Asp.Versioning;
 using Dotnetstore.MinimalApi.Api.WebApi.Filters;
@@ -35,6 +36,7 @@ public sealed class WebApplicationExtensionsTests
     private const string OrdersPath = "/orders";
     private const string PingPath = "/ping";
     private const string ProductionEnvironment = "Production";
+    private const string ScalarDocsPath = "/docs/";
     private const string TraceHeaderName = "X-Trace-Id";
     private static readonly string AllowedOrigin = WebApiDefaultValues.CorsAllowedOrigins.Single();
     private static readonly string TooManyRequestsMessage = new WebApiRateLimitingOptions().RejectionMessage;
@@ -170,7 +172,7 @@ public sealed class WebApplicationExtensionsTests
         builder.RegisterWebApi();
 
         using var serviceProvider = builder.Services.BuildServiceProvider();
-        var options = serviceProvider.GetRequiredService<IOptions<ApiKeyOptions>>().Value;
+        var options = serviceProvider.GetRequiredService<IOptions<ApiKeySecurityOptions>>().Value;
 
         // Assert
         options.HeaderName.ShouldBe(TestHttp.ApiKeyHeaderName);
@@ -549,6 +551,93 @@ public sealed class WebApplicationExtensionsTests
     }
 
     [Fact]
+    public async Task RegisterMiddlewares_MapsScalarApiReference_InDevelopment()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Development,
+            cancellationToken,
+            configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
+        var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+
+        // Act
+        var response = await client.GetAsync(ScalarDocsPath, cancellationToken);
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        content.ShouldContain("<title>Dotnetstore MinimalApi Web API</title>");
+        content.ShouldContain("scalar");
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_DoesNotMapScalarApiReference_OutsideDevelopment()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Production,
+            cancellationToken,
+            configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
+        var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+
+        // Act
+        var response = await client.GetAsync(ScalarDocsPath, cancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldDescribeApiKeySecurityScheme_InOpenApiDocument()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Development,
+            cancellationToken,
+            configureRoutes: webApplication => webApplication.MapGet(PingPath, () => Results.Ok("pong")));
+        var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+
+        // Act
+        using var document = await GetOpenApiDocumentAsync(client, cancellationToken);
+        var apiKeyScheme = document.RootElement
+            .GetProperty("components")
+            .GetProperty("securitySchemes")
+            .GetProperty("ApiKey");
+
+        // Assert
+        apiKeyScheme.GetProperty("type").GetString().ShouldBe("apiKey");
+        apiKeyScheme.GetProperty("name").GetString().ShouldBe(TestHttp.ApiKeyHeaderName);
+        apiKeyScheme.GetProperty("in").GetString().ShouldBe("header");
+    }
+
+    [Fact]
+    public async Task RegisterMiddlewares_ShouldApplyApiKeySecurityRequirement_ToAllMappedOperationsInOpenApiDocument()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var app = await CreateStartedAppAsync(
+            Environments.Development,
+            cancellationToken,
+            configureRoutes: webApplication =>
+            {
+                webApplication.MapGet(PingPath, () => Results.Ok("pong")).WithName("Ping");
+                webApplication.MapPost(OrdersPath, () => Results.Ok()).WithName("CreateOrder");
+            });
+        var client = TestHttp.CreateClient(app, TestHttp.HttpsLocalhost);
+
+        // Act
+        using var document = await GetOpenApiDocumentAsync(client, cancellationToken);
+        var paths = document.RootElement.GetProperty("paths");
+
+        // Assert
+        ShouldContainApiKeySecurityRequirement(paths.GetProperty(PingPath).GetProperty("get"));
+        ShouldContainApiKeySecurityRequirement(paths.GetProperty(OrdersPath).GetProperty("post"));
+    }
+
+    [Fact]
     public async Task RegisterMiddlewares_UsesHttpsRedirection()
     {
         // Arrange
@@ -911,6 +1000,27 @@ public sealed class WebApplicationExtensionsTests
         configureRoutes?.Invoke(app);
 
         return app;
+    }
+
+    private static async Task<JsonDocument> GetOpenApiDocumentAsync(HttpClient client, CancellationToken cancellationToken)
+    {
+        using var response = await client.GetAsync(TestHttp.OpenApiDocumentPath, cancellationToken);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        await using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+
+        return await JsonDocument.ParseAsync(contentStream, cancellationToken: cancellationToken);
+    }
+
+    private static void ShouldContainApiKeySecurityRequirement(JsonElement operation)
+    {
+        var security = operation.GetProperty("security");
+        security.ValueKind.ShouldBe(JsonValueKind.Array);
+
+        security
+            .EnumerateArray()
+            .Any(requirement => requirement.TryGetProperty("ApiKey", out var scopes) && scopes.ValueKind == JsonValueKind.Array && scopes.GetArrayLength() == 0)
+            .ShouldBeTrue();
     }
 
 

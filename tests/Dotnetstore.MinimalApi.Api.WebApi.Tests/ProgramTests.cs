@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using System.Text.Json;
 using Dotnetstore.MinimalApi.Api.WebApi.Tests.Helpers;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -59,6 +60,26 @@ public sealed class ProgramTests
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Program_ShouldExposeOpenApiDocument_WhenRunningInDevelopment()
+    {
+        // Arrange
+        await using var factory = CreateFactory(Environments.Development);
+        using var client = TestHttp.CreateClient(factory, TestHttp.HttpsLocalhost);
+
+        // Act
+        using var response = await client.GetAsync(TestHttp.OpenApiDocumentPath, TestContext.Current.CancellationToken);
+        await using var contentStream = await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken);
+        using var document = await JsonDocument.ParseAsync(contentStream, cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        document.RootElement.GetProperty("components")
+            .GetProperty("securitySchemes")
+            .TryGetProperty("ApiKey", out _)
+            .ShouldBeTrue();
     }
 
     private static ProgramWebApplicationFactory CreateFactory(
