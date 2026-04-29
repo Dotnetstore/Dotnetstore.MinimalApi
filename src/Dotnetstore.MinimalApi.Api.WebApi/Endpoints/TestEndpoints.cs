@@ -11,6 +11,7 @@ internal sealed class TestEndpoints(
         app.MapGet("/test", () => "Hello World!")
             .WithApiVersionSet(webApplicationHandlers.GetApiVersionSet(app))
             .AddEndpointFilter<LogPerformanceFilter>()
+            .AddEndpointFilter<ApiKeyFilter>()
             .MapToApiVersion(1.0);
     }
 }

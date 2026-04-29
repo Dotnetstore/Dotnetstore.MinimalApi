@@ -8,6 +8,8 @@ namespace Dotnetstore.MinimalApi.Api.WebApi.Tests.Helpers;
 internal static class TestHttp
 {
     internal static string ApiVersionHeaderName => WebApiConfiguration.ApiVersionHeaderName;
+    internal const string ApiKeyHeaderName = "X-API-KEY";
+    internal const string ApiKeyValue = "5CC5F891B1A44E45BCFAB72B598515CA";
     internal const string HttpLocalhost = "http://localhost";
     internal const string HttpsLocalhost = "https://localhost";
     internal const string OpenApiDocumentPath = "/openapi/v1.json";
@@ -42,6 +44,19 @@ internal static class TestHttp
         request.Headers.Add(ApiVersionHeaderName, apiVersion);
 
         return request;
+    }
+
+    internal static HttpRequestMessage CreateAuthorizedVersionedRequest(HttpMethod method, string requestUri, string apiVersion)
+    {
+        var request = CreateVersionedRequest(method, requestUri, apiVersion);
+        AddApiKeyHeader(request);
+
+        return request;
+    }
+
+    internal static void AddApiKeyHeader(HttpRequestMessage request)
+    {
+        request.Headers.Add(ApiKeyHeaderName, ApiKeyValue);
     }
 
     internal static HttpRequestMessage CreateCorsPreflightRequest(

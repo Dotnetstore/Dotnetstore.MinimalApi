@@ -1,6 +1,7 @@
-@Dotnetstore.MinimalApi.Api.WebApi_HostAddress = http://localhost:5126
+@HostAddress = https://localhost:7201
+@ApiKey = 5CC5F891B1A44E45BCFAB72B598515CA
 
-GET {{Dotnetstore.MinimalApi.Api.WebApi_HostAddress}}/weatherforecast/
+### Request
+GET {{HostAddress}}/test/
 Accept: application/json
-
-###
+X-API-KEY: {{ApiKey}}

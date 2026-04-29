@@ -17,12 +17,27 @@ public sealed class ProgramTests
     private const string TestPath = "/test";
 
     [Fact]
-    public async Task Program_ShouldStartSuccessfully_WhenSingletonTestEndpointIsRegistered()
+    public async Task Program_ShouldReturnUnauthorized_WhenTestEndpointIsCalledWithoutApiKey()
     {
         // Arrange
         await using var factory = CreateFactory(Environments.Production);
         using var client = TestHttp.CreateClient(factory, TestHttp.HttpsLocalhost);
         using var request = TestHttp.CreateVersionedRequest(HttpMethod.Get, TestPath, "1.0");
+
+        // Act
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Program_ShouldStartSuccessfully_WhenSingletonTestEndpointIsRegisteredAndApiKeyIsValid()
+    {
+        // Arrange
+        await using var factory = CreateFactory(Environments.Production);
+        using var client = TestHttp.CreateClient(factory, TestHttp.HttpsLocalhost);
+        using var request = TestHttp.CreateAuthorizedVersionedRequest(HttpMethod.Get, TestPath, "1.0");
 
         // Act
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);

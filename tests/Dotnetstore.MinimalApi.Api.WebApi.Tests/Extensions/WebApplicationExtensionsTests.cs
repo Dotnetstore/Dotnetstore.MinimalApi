@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Threading.RateLimiting;
 using Asp.Versioning;
+using Dotnetstore.MinimalApi.Api.WebApi.Filters;
 using Dotnetstore.MinimalApi.Api.WebApi.Configuration;
 using Dotnetstore.MinimalApi.Api.WebApi.Endpoints;
 using Dotnetstore.MinimalApi.Api.WebApi.Exceptions;
@@ -135,6 +136,44 @@ public sealed class WebApplicationExtensionsTests
         serviceDescriptor.ShouldNotBeNull();
         serviceDescriptor.Lifetime.ShouldBe(ServiceLifetime.Singleton);
         serviceProvider.GetRequiredService<IProblemDetailsService>().ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void RegisterWebApi_RegistersApiKeyFilter_AsScopedService()
+    {
+        // Arrange
+        var builder = CreateBuilder();
+
+        // Act
+        builder.RegisterWebApi();
+
+        var serviceDescriptor = builder.Services.LastOrDefault(service =>
+            service.ServiceType == typeof(ApiKeyFilter));
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        using var scope = serviceProvider.CreateScope();
+
+        // Assert
+        serviceDescriptor.ShouldNotBeNull();
+        serviceDescriptor.Lifetime.ShouldBe(ServiceLifetime.Scoped);
+        scope.ServiceProvider.GetRequiredService<ApiKeyFilter>().ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void RegisterWebApi_ShouldBindApiKeyOptions_FromAppsettingsJson()
+    {
+        // Arrange
+        var builder = CreateBuilder(Environments.Production);
+
+        // Act
+        builder.RegisterWebApi();
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var options = serviceProvider.GetRequiredService<IOptions<ApiKeyOptions>>().Value;
+
+        // Assert
+        options.HeaderName.ShouldBe(TestHttp.ApiKeyHeaderName);
+        options.Value.ShouldBe(TestHttp.ApiKeyValue);
     }
 
     [Fact]

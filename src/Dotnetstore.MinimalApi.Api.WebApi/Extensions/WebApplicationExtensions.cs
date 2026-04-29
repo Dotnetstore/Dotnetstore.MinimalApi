@@ -3,6 +3,7 @@ using Asp.Versioning;
 using Dotnetstore.MinimalApi.Api.WebApi.Configuration;
 using Dotnetstore.MinimalApi.Api.WebApi.Endpoints;
 using Dotnetstore.MinimalApi.Api.WebApi.Exceptions;
+using Dotnetstore.MinimalApi.Api.WebApi.Filters;
 using Dotnetstore.MinimalApi.Api.WebApi.Handlers;
 using Microsoft.Extensions.Options;
 
@@ -25,6 +26,8 @@ internal static class WebApplicationExtensions
                 .ValidateOnStart();
 
             var webApiOptions = builder.ResolveWebApiOptions();
+            
+            builder.Services.Configure<ApiKeyOptions>(builder.Configuration.GetSection(ApiKeyOptions.SectionName));
 
             builder.SetupHsts(webApiOptions);
             builder.SetupCors(webApiOptions);
@@ -36,8 +39,8 @@ internal static class WebApplicationExtensions
                 .AddProblemDetails()
                 .AddSingleton<IWebApplicationHandlers, WebApplicationHandlers>()
                 .AddSingleton<ITestEndpoints, TestEndpoints>()
-                .AddExceptionHandler<DefaultExceptionHandler>();
-        
+                .AddExceptionHandler<DefaultExceptionHandler>()
+                .AddScoped<ApiKeyFilter>();
         
             return builder;
         }
